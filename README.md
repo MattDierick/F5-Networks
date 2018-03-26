@@ -1,4 +1,4 @@
-# <img align="center" src="f5.svg" height="64">&nbsp;&nbsp;F5 Networks
+# <img align="center" src="f5logo.svg" height="64">&nbsp;&nbsp;F5 Networks
 
 
 This project is dedicated to developing and sharing useful code for various F5 products and solutions.
