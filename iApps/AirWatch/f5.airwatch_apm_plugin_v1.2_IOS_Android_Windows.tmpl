@@ -1,0 +1,1286 @@
+cli admin-partitions {
+    update-partition Common
+}
+sys application template /Common/f5.airwatch_apm {
+    actions {
+        definition {
+            html-help {
+                <p><b>AirWatch APM Plugin Template</b></p>
+<p>For improved readability, we suggest you click the Launch button to view the Help in a separate, resizable window.</p>
+<p>This template creates the SSL sideband and iRules necessary to enable calls from an APM Access Policy to an AirWatch MDM instance. Before you start: </p>
+<ul>
+  <li>Check System -> Resource Provisioning to ensure that APM (access policy manager) is
+    provisioned.</li>
+  <li>License and provision additional BIG-IP modules (if needed).</li>
+  <li>Ensure your BigIP system has the ability to connect outbound to your AirWatch server on port 443. If your server is located on an external network to your APM instance, ensure that all necessary firewall rules are in place to allow this connectivity.</li>
+  <li>Ensure that the BigIP has the ability to pass DNS queries to the resolver you specify.</li>
+</ul>
+
+ <p><b>Airwatch Configuration</b><br />
+<p><i>Hostname</i><br />
+<p>If you have selected a standalone configuration type, enter the hostname we will use to connect to your AirWatch instance. This hostname must be resolvable by the DNS resolver entered as part of the Sideband Configuration. If you have selected a Hosted type, then you can choose the correct host from the dropdown list.</p>
+<p><i>API Username</i><br />
+<p>Enter the username you've configured for API access at your VSP. Consult your AirWatch documentation to determine how to create an account there with the correct access rights.</p>
+<p><i>API Password</i><br />
+<p>Enter the password for the API user account at your AirWatch server. Please note that this password will be stored in your BIG-IP configuration unencrypted, so please ensure necessary steps are taken to restrict access to your BIG-IP.</p>
+<p><i>API Key</i><br />
+<p>Enter your configuration's API Key. This will ensure that the API calls are performed for your dedicated container. Your API Key is found in your AirWatch configuration under Menu -> System Settings -> System -> Advanced -> API -> REST API. You must enter it exactly as it appears.</p>
+
+ <p><b>Sideband Configuration</b></p>
+ <p><i>Automatically Select IP</i><br />
+<p>By default, this iApp will attempt to select an address that will be used for the Sideband VS. To do so, it selects a random address in the 192.168.0.0/16 CIDR address space that it has determined is not in use at this time.</p>
+<p>Note that this address will NOT be routable from this BIG-IP - it is used only for the purposes on the sideband connection and will not be bound to any VLAN (and thus will not be able to be accessed outside this BIG-IP).</p>
+ <p><i>DNS Resolver</i><br />
+<p>Enter an IP address of a DNS resolver that is capable of resolving the IP address of the hostname you configured in the MobileIron Configuration section.</p>
+ <p><i>SNAT Automap</i><br />
+<p>By default, the system will initiate the sideband connection using a Self IP address that matches the interface where the routing table defines the connection should leave the BIG-IP. Normally, it is not necessary to change this behavior.</p>
+<p>However, if you need to override this setting and input a specific IP address from which connections should be initiated, you can configure it by selecting "No". Note that, in either case, you must ensure that your BIG-IP system has a correct routing configuration to reach your system.</p>
+            }
+            implementation {
+                #################################################################################
+### AIRWATCH APM PLUGIN IAPP
+### Version: 1.3 - F5 Networks
+###
+### Functionality: Provides the ability to pull mobile device information
+###                from Airwatch MDM into F5 APM.
+###
+### Versions:
+###   1.3 - Added iOS9 support
+###   1.2 - Added iOS8 support 
+###   1.1 - Added iOS7 Edge Client support: UDID lookup mode (jm)
+###   1.0 - Initial release (jm)
+
+
+# IAPP SETUP
+
+# Set up initial variables, subroutines and constants needed
+# to execute this iApp.
+
+tmsh::include "f5.app_utils"
+
+tmsh::log_dest file
+tmsh::log_level crit
+
+set NO_ANSWER "No"
+set YES_ANSWER "Yes"
+set WAN_OPTION "WAN"
+set EMPTY_STRING "EMPTY_STRING_NO_VALUE_PRESENT"
+set ADDR_FIELD "addr"
+set PORT_FIELD "port"
+set RATIO_FIELD "ratio"
+set CONNECTION_LIMIT_FIELD "connection_limit"
+set HOST_FIELD "host"
+set ONE_SPACE " "
+set HTTP_11_VERSION_STRING "\"Version 1.1\""
+
+proc tmsh_create { component arguments } {
+    regsub -all {\"} $arguments "\\\"" arguments
+    regsub -all {\[} $arguments "\\\[" arguments
+    regsub -all {\]} $arguments "\\\]" arguments
+    regsub -all {\$} $arguments "\\\$" arguments
+    tmsh::run_proc f5.app_utils:do_tmsh_create "\"$component\"" "\"$arguments\""
+}
+
+proc tmsh_modify { component arguments } {
+    regsub -all {\"} $arguments "\\\"" arguments
+    regsub -all {\[} $arguments "\\\[" arguments
+    regsub -all {\]} $arguments "\\\]" arguments
+    regsub -all {\$} $arguments "\\\$" arguments
+    tmsh::run_proc f5.app_utils:do_tmsh_modify "\"$component\"" "\"$arguments\""
+}
+
+proc collect_variables { } {
+# IAPP SETUP
+
+	# Go through the user input and decide what we need to do.
+
+	if { $::network__aw_snat_automap == $::YES_ANSWER } {
+		puts "Creating a SNAT pool."
+		set ::enable_snatpool 1
+	} else {
+		set ::enable_snatpool 0
+	}
+	puts "Standalone mode selected."
+	
+	if { $::airwatch__aw_debug == $::YES_ANSWER } {
+		set ::enable_debug 1
+	} else {
+		set ::enable_debug 0
+	}
+	set ::irule_hostname $::airwatch__aw_hostname
+	set ::irule_username $::airwatch__aw_username
+	set ::irule_tenantcode $::airwatch__aw_tenantcode
+	set ::irule_password $::airwatch__aw_password
+
+}
+
+proc setup_sideband { } {
+	tmsh::create / ltm profile http ${tmsh::app_name}_http_sideband defaults-from http request-chunking preserve response-chunking unchunk
+	tmsh::create / ltm virtual ${tmsh::app_name}_sideband_80 destination ${::aw_sideband_ip}:80 profiles replace-all-with \{ tcp ${tmsh::app_name}_http_sideband serverssl-insecure-compatible \} snat automap rules \{ ${tmsh::app_name}_airwatch_connector \} vlans-enabled
+	#tmsh::modify / ltm virtual-address "/Common/${::mi_sideband_ip}" arp disabled icmp-echo disabled
+}
+
+proc setup_irules { } {
+
+	set ::aw_virtual "/Common/${tmsh::app_name}.app/${tmsh::app_name}_sideband_80"
+
+#--------------------------------------------------------------------------------
+set airwatch_connector_code {
+
+#############################################################
+## APM Airwatch Connector
+## Version: 1.3
+#
+# Applies to an internal VIP for use by the APM Airwatch
+# Support iRule. The IP does not need to be routable. This
+# VIP is intended to apply SSL to the Airwatch sideband
+# connection only.
+#
+# This rule will only accept HTTP connections outbound to the 
+# hostname configured in the apm_airwatch_connector that 
+# come through the internal VIP-target. Even if an address is
+# chosen that is routable, all external connections will be
+# rejected.
+#
+# This VIP:80 -> HTTP -> serverssl -> Resolved AW node:443
+
+when HTTP_REQUEST {
+	if { \[HTTP::host\] equals \$static::${tmsh::app_name}_aw_host && \[IP::remote_addr\] starts_with "127." } {
+		set aw_ips \[RESOLV::lookup @\$static::${tmsh::app_name}_aw_resolver \$static::${tmsh::app_name}_aw_host\]
+		if { \$static::${tmsh::app_name}_aw_debug } { log local0. "AW servers for \[HTTP::host\] at \$aw_ips." }
+		set _awipaddress \[lindex \$aw_ips 0\]
+		if { \$static::${tmsh::app_name}_aw_debug } { log local0. "Selected AW server at \$_awipaddress. Sending \[HTTP::path\]" }
+        if { \(\$_awipaddress equals ""\) } {
+			log local0. "Airwatch Sideband Error: Address lookup for \$static::${tmsh::app_name}_aw_host failed. Please check your DNS configuration."
+		} else {
+			node \$_awipaddress 443
+			log local0. "Sideband AW connected"
+		}
+	} else { 
+		reject
+	}
+}
+
+when HTTP_REQUEST_SEND {
+	if { \$static::${tmsh::app_name}_aw_debug } { log local0. "Sending the payload. SNAT \[IP::local_addr\] APMinternal \[IP::client_addr\] AWexternal \[IP::remote_addr\]"}
+}
+
+when HTTP_RESPONSE {
+	if { \$static::${tmsh::app_name}_aw_debug } { log local0. "Got a valid response on sideband. \[HTTP::status\]" }	
+}
+
+when LB_FAILED {
+	if { \$static::${tmsh::app_name}_aw_debug } { log local0. "Could not connect to AW server at \$aw_ips." }	
+}
+
+}
+#--------------------------------------------------------------------------------
+
+
+tmsh::create / ltm rule "${tmsh::app_name}_airwatch_connector" [subst $airwatch_connector_code]
+
+
+#--------------------------------------------------------------------------------
+set airwatch_apm_plugin_code {
+
+######################################################################
+## APM Airwatch Support Plug-in
+## Version: 1.3
+#
+# Applies to an APM VIP to enable collection of policy data
+# from Airwatch into the APM session database.
+#--------------------------------------------------------------------
+# Available Functions:
+#
+## KEY: MAC_ADDRESS (session.client.mac_address)
+##    or UDID (session.client.unique_id)
+#
+# - aw_device_collect:   Wake up the Airwatch engine on the
+#						connecting device and prompt it to 
+#						execute an inventory.
+# - aw_device_message:	 Send a PNS message via the Airwatch
+#						infrastructure using the content set
+#						in "session.airwatch.device.message.body".
+# - aw_device_apps:      Collect information about all apps 
+#						loaded on the connecting device.
+#                       WARNING: the retrieved device inventory
+#                       can be sizable and should NOT be pulled
+#                       unless policy evaluation at APM requires
+#						it for a VPE decision.
+# - aw_device_details:	 Retrieve all known device-level info
+#						previously collected by Airwatch.
+# - aw_device_security:  Pull all known security posture info on
+#						the connecting device.
+# - aw_device_gps:		 Query the connecting device's location
+# 						information.
+# - aw_device_user:		 Gather the information on the device's 
+#						owner as known by Airwatch. Can be used to
+#						compare login name to device owner.
+
+when RULE_INIT {
+
+	################################################################
+	# CONFIGURATION
+	# Only these settings can be modified.
+	#
+	# - Set Airwatch host details
+	set static::${tmsh::app_name}_aw_host "${::irule_hostname}"
+	#
+	# - Set username and password for API access
+	set static::${tmsh::app_name}_aw_apiuser "${::irule_username}"
+	set static::${tmsh::app_name}_aw_apipassword "${::irule_password}"
+	set static::${tmsh::app_name}_aw_tenantcode "${::irule_tenantcode}"
+	#
+	# - Set name of SSL sideband handling virtual to use.
+	set static::${tmsh::app_name}_aw_virtual_name "${::aw_virtual}"
+	#
+	# - Set the IP address of a DNS resolver to use
+	set static::${tmsh::app_name}_aw_resolver "${::network__aw_resolver}"
+	#
+	# - Set a timeout for connecting to the MobileIron VSP
+	set static::${tmsh::app_name}_aw_timeout 300
+	#
+	# - Test MAC for enabling a demonstration.
+	# This will hardcode the MAC address used for
+	# queries when the "session.airwatch.fake" variable
+	# is set to true (1).
+	set static::${tmsh::app_name}_test_mac "000000000000"
+	#
+	# - Set debug mode for all transactions.
+	set static::${tmsh::app_name}_aw_debug ${::enable_debug}
+	###############################################################
+
+}
+
+
+when ACCESS_POLICY_AGENT_EVENT {
+	
+	if { \$static::${tmsh::app_name}_aw_debug } { set sess_id \[ACCESS::session data get "session.user.sessionid"\] }
+	
+	set fake_session \[ACCESS::session data get "session.airwatch.fake"\]
+	if { \$fake_session == 1 } {
+		log local0. "Using fake query MAC for Airwatch API."
+		set conn_mac \$static::${tmsh::app_name}_test_mac
+	} else {
+		set conn_mac \[regsub -all {:} \[ACCESS::session data get "session.client.mac_address"\] ""\]
+	}
+	
+	
+#### For Win8 devices, you have to push the UDID into machine certificate. The iRule detects the plaform and uses UDID REST call. Adapt your VPE in order to retrieve the UDID from the certificate and set session.client.unique_id variable.
+
+	switch -glob \[ACCESS::session data get "session.client.platform"\] {
+	    		"Win8*" {
+	    			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "Windows 8.x client detected. Switching to UDID lookup mode with machine certificate analysis." }
+	    			set conn_method "udid"
+					set conn_mac \[ACCESS::session data get "session.client.unique_id"\]
+	    		}
+	    		"iOS" {
+	    			if {\[ACCESS::session data get "session.client.platform_version"\] starts_with "7." || \[ACCESS::session data get "session.client.platform_version"\] starts_with "8." || \[ACCESS::session data get "session.client.platform_version"\] starts_with "9."}
+					{
+					if { \$static::${tmsh::app_name}_aw_debug } { log local0. "iOS7 or later client detected. Switching to UDID lookup mode." }
+					set conn_method "udid"
+					set conn_mac \[ACCESS::session data get "session.client.unique_id"\]
+					}
+	    		}
+	    		default {
+	    			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "Normal client detected, supporting Mac Address recovery. Switching to MAC address lookup mode." }
+					set conn_method "macaddress"	
+	    		}
+
+	    	}
+
+
+	switch \[ACCESS::policy agent_id\] {
+		"aw_device_collect" {
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Doing Device Collect." }
+			set conn_sid \[ACCESS::session sid\]
+			set conn \[connect -timeout 1500 -idle 30 -status conn_status \$static::${tmsh::app_name}_aw_virtual_name\]
+			if {\$conn eq ""} {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Connection not established with AW host." }
+				log local0. "Could not establish the connection. Please check to see whether DNS is set up properly on this LTM."
+				ACCESS::session data set -sid \$conn_sid session.airwatch.device.wakeup.connection 0
+				ACCESS::session data set -sid \$conn_sid session.airwatch.device.wakeup.connection_status "connect_failed"
+				return
+			}
+			set conn_info \[connect info -idle -status \$conn\]
+			set send_data {
+POST /api/v1/mdm/devices/\${conn_method}/\${conn_mac}/query HTTP/1.1
+Accept: text/html, application/xhtml+xml, */*
+User-Agent: F5-APM-sideband/1.0
+Host: \${static::${tmsh::app_name}_aw_host}
+Connection: Keep-Alive
+Content-Length: 15
+Content-Type: application/x-www-form-urlencoded
+aw-tenant-code: \${static::${tmsh::app_name}_aw_tenantcode}
+Authorization: Basic \[b64encode "\${static::${tmsh::app_name}_aw_apiuser}:\${static::${tmsh::app_name}_aw_apipassword}"\]
+
+id=\${conn_mac}
+
+			}
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Sending message \[subst \$send_data\]" }
+			set send_info \[send -timeout 1500 -status send_status \$conn \[subst \$send_data\]\]
+			set recv_data \[recv -peek -status peek_status -timeout 3000 \$conn\]
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Collected response - \$peek_status - \$recv_data" }
+			if {\[string match "HTTP/1.1 202*\\r\\n\\r\\n" \$recv_data\]} {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Matched expected response (202)." }
+				set success 1
+			} else {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Did not match expected response (202)." }
+				set success 0
+			}
+			close \$conn
+			if { \$success } {
+				ACCESS::session data set -sid \$conn_sid session.airwatch.device.wakeup.connection 1
+				ACCESS::session data set -sid \$conn_sid session.airwatch.device.wakeup.connection_status "success"
+			} else {
+				ACCESS::session data set -sid \$conn_sid session.airwatch.device.wakeup.connection 0
+				ACCESS::session data set -sid \$conn_sid session.airwatch.device.wakeup.connection_status "failed"
+			}
+		}
+		"aw_device_message" {
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Doing Message Send." }
+			set conn_sid \[ACCESS::session sid\]
+			set conn \[connect -timeout 1500 -idle 30 -status conn_status \$static::${tmsh::app_name}_aw_virtual_name\]
+			if {\$conn eq ""} {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Connection not established with AW host." }
+				log local0. "Could not establish the connection. Please check to see whether DNS is set up properly on this LTM."
+				ACCESS::session data set -sid \$conn_sid session.airwatch.device.message.connection 0
+				ACCESS::session data set -sid \$conn_sid session.airwatch.device.message.connection_status "connect_failed"
+				return
+			}
+			set conn_info \[connect info -idle -status \$conn\]
+			set message_template {
+<PushNotificationMessage xmlns='http://www.air-watch.com/servicemodel/resources' xmlns:i='http://www.w3.org/2001/XMLSchema-instance'>
+ <MessageBody>\${message}</MessageBody>
+ <MessageType>Caution</MessageType>
+</PushNotificationMessage>
+			}
+			set message \[ACCESS::session data get -sid \$conn_sid session.airwatch.device.message.body\]
+			set message_out \[subst \$message_template\]
+			set message_size \[string length \$message_out\]
+			set send_data {
+POST /api/v1/mdm/devices/\${conn_method}/\${conn_mac}/sendmessage/push HTTP/1.1
+Accept: text/html, application/xhtml+xml, */*
+User-Agent: F5-APM-sideband/1.0
+Host: \${static::${tmsh::app_name}_aw_host}
+Connection: Keep-Alive
+Content-Length: \${message_size}
+Content-Type: application/xml
+aw-tenant-code: \${static::${tmsh::app_name}_aw_tenantcode}
+Authorization: Basic \[b64encode "\${static::${tmsh::app_name}_aw_apiuser}:\${static::${tmsh::app_name}_aw_apipassword}"\]
+
+\${message_out}
+
+			}
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Sending message \[subst \$send_data\]" }
+			set send_info \[send -timeout 1500 -status send_status \$conn \[subst \$send_data\]\]
+			set recv_data \[recv -peek -status peek_status -timeout 3000 \$conn\]
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Collected response - \$peek_status - \$recv_data" }
+			if {\[string match "HTTP/1.1 202*\\r\\n\\r\\n" \$recv_data\]} {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Matched expected response (202)." }
+				set success 1
+			} else {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Did not get expected response (202)." }
+				set success 0
+			}
+			close \$conn
+			if { \$success } {
+				ACCESS::session data set -sid \$conn_sid session.airwatch.device.message.connection 1
+				ACCESS::session data set -sid \$conn_sid session.airwatch.device.message.connection_status "success"
+			} else {
+				ACCESS::session data set -sid \$conn_sid session.airwatch.device.message.connection 0
+				ACCESS::session data set -sid \$conn_sid session.airwatch.device.message.connection_status "failed"
+			}
+		}
+		"aw_device_details" {
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Doing Device Details." }
+			set conn_sid \[ACCESS::session sid\]
+			set conn \[connect -timeout 1500 -idle 30 -status conn_status \$static::${tmsh::app_name}_aw_virtual_name\]
+			if {\$conn eq ""} {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Connection not established with AW host." }
+				log local0. "Could not establish the connection. Please check to see whether DNS is set up properly on this LTM."
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection 0
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection_status "connect_failed"
+				return
+			}
+			set conn_info \[connect info -idle -status \$conn\]
+			set send_data {
+GET /api/v1/mdm/devices/\${conn_method}/\${conn_mac} HTTP/1.1
+Accept: text/html, application/xhtml+xml, */*
+User-Agent: F5-APM-sideband/1.0
+Host: \${static::${tmsh::app_name}_aw_host}
+Connection: Keep-Alive
+aw-tenant-code: \${static::${tmsh::app_name}_aw_tenantcode}
+Authorization: Basic \[b64encode "\${static::${tmsh::app_name}_aw_apiuser}:\${static::${tmsh::app_name}_aw_apipassword}"\]
+
+			}
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Sending message \[subst \$send_data\]" }
+			set send_info \[send -timeout 1500 -status send_status \$conn \[subst \$send_data\]\]
+			set recv_data \[recv -peek -status peek_status -timeout 3000 \$conn\]
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Collected response - \$peek_status - \$recv_data" }
+			if {\[string match "HTTP/1.1 200*\\r\\n\\r\\n*" \$recv_data\]} {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Matched expected response (200)." }
+				set success 1
+			} else {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Did not match expected response (200)." }
+				set success 0
+			}
+			close \$conn
+			if { \$success } {
+
+				# SUCCESSFUL DATA RETRIEVAL
+				# We're going to parse the XML data and seed it into the session database.
+			    set xml \$recv_data
+				# Strip the HTTP and XML headers and start parsing on the XML body.
+				# This procedure converts an XML document into a nested TCL list structure.
+				regsub {^HTTP.*\\r\\n\\r\\n} \$xml "" xml
+				regsub {^<.xml .*\\?>} \$xml "" xml
+				regsub -all {>\\s*<} \[string trim \$xml " \\n\\t<>"\] "\\} \\{" xml
+				set xml \[string map {> "\\} \\{#text \\{" < "\\}\\} \\{"}  \$xml\]
+				set res ""   ;# string to collect the result   
+				set stack {} ;# track open tags\\
+				set rest {}
+
+				foreach item "{\$xml}" {
+					switch -regexp -- \$item {
+						^# {
+							append res "{\[lrange \$item 0 end\]} " ; #text item
+							}
+						^/ {
+							regexp {/(.+)} \$item -> tagname ;# end tag
+							set expected \[lindex \$stack end\]
+							if {\$tagname!=\$expected} {error "\$item != \$expected"}
+							set stack \[lrange \$stack 0 end-1\]
+							append res "\\}\\} "
+							}
+						/\$ { # singleton - start and end in one <> group
+							regexp {(\[^ \]+)( (.+))?/\$} \$item -> tagname - rest
+							set rest \[lrange \[string map {= " "} \$rest\] 0 end\]
+							append res "{\$tagname \[list \$rest\] {}} "
+							}
+						default {
+							set tagname \[lindex \$item 0\] ;# start tag
+							set rest \[lrange \[string map {= " "} \$item\] 1 end\]
+							lappend stack \$tagname
+							append res "\\{\$tagname \[list \$rest\] \\{"
+						}
+					}
+					if {\[llength \$rest\]%2} {log local0. "Airwatch Plugin: XML parse failure -- att's not paired: \$rest"}
+				}
+				string map {\"\\\} \\\}\" \"\\\}\\\}\"} \[lindex \$res 0\]
+				set result \[lindex \[join \$res\] end\]
+				set key {}
+				set value {}
+				foreach t "\$result" {
+				switch -- \[llength \$t\] {
+					2 { 
+						set t \[lindex \[split \[lindex \$t 1\] {=}\] 0\]
+					}
+					3 {
+						foreach { tag attributes children } \$t break
+						if \[llength \$children\] {
+							foreach child \$children {
+								switch -glob -- \$child {
+									default {
+										# PUBLISH GENERAL DEVICE INFORMATION
+										set value \$child
+										# Don't bother adding empty values to session variables
+										if { not (\$value == "") } {
+											set key \[string tolower \$tag\]
+											set value \[lindex \$value 1\]
+											# Create a session variable for each general device item
+											ACCESS::session data set -sid \$conn_sid "session.airwatch.device.\$key" "\$value"
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+				# Define that the session has been completed and returned valid data.
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection 1
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection_status "valid"
+			} else {
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection 0
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection_status "invalid"
+			}
+		}
+		"aw_device_security" {
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Doing Device Security." }
+			set conn_sid \[ACCESS::session sid\]
+			set conn \[connect -timeout 1500 -idle 30 -status conn_status \$static::${tmsh::app_name}_aw_virtual_name\]
+			if {\$conn eq ""} {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Connection not established with AW host." }
+				log local0. "Could not establish the connection. Please check to see whether DNS is set up properly on this LTM."
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection 0
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection_status "connect_failed"
+				return
+			}
+			set conn_info \[connect info -idle -status \$conn\]
+			set send_data {
+GET /api/v1/mdm/devices/\${conn_method}/\${conn_mac}/security HTTP/1.1
+Accept: text/html, application/xhtml+xml, */*
+User-Agent: F5-APM-sideband/1.0
+Host: \${static::${tmsh::app_name}_aw_host}
+Connection: Keep-Alive
+aw-tenant-code: \${static::${tmsh::app_name}_aw_tenantcode}
+Authorization: Basic \[b64encode "\${static::${tmsh::app_name}_aw_apiuser}:\${static::${tmsh::app_name}_aw_apipassword}"\]
+
+			}
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Sending message \[subst \$send_data\]" }
+			set send_info \[send -timeout 1500 -status send_status \$conn \[subst \$send_data\]\]
+			set recv_data \[recv -peek -status peek_status -timeout 3000 \$conn\]
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Collected response - \$peek_status - \$recv_data" }
+			if {\[string match "HTTP/1.1 200*\\r\\n\\r\\n*" \$recv_data\]} {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Matched expected response (200)." }
+				set success 1
+			} else {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Did not match expected response (200)." }
+				set success 0
+			}
+			close \$conn
+			if { \$success } {
+
+				# SUCCESSFUL DATA RETRIEVAL
+				# We're going to parse the XML data and seed it into the session database.
+			    set xml \$recv_data
+				# Strip the HTTP and XML headers and start parsing on the XML body.
+				# This procedure converts an XML document into a nested TCL list structure.
+				regsub {^HTTP.*\\r\\n\\r\\n} \$xml "" xml
+				regsub {^<.xml .*\\?>} \$xml "" xml
+				regsub -all {>\\s*<} \[string trim \$xml " \\n\\t<>"\] "\\} \\{" xml
+				set xml \[string map {> "\\} \\{#text \\{" < "\\}\\} \\{"}  \$xml\]
+				set res ""   ;# string to collect the result   
+				set stack {} ;# track open tags\\
+				set rest {}
+
+				foreach item "{\$xml}" {
+					switch -regexp -- \$item {
+						^# {
+							append res "{\[lrange \$item 0 end\]} " ; #text item
+							}
+						^/ {
+							regexp {/(.+)} \$item -> tagname ;# end tag
+							set expected \[lindex \$stack end\]
+							if {\$tagname!=\$expected} {error "\$item != \$expected"}
+							set stack \[lrange \$stack 0 end-1\]
+							append res "\\}\\} "
+							}
+						/\$ { # singleton - start and end in one <> group
+							regexp {(\[^ \]+)( (.+))?/\$} \$item -> tagname - rest
+							set rest \[lrange \[string map {= " "} \$rest\] 0 end\]
+							append res "{\$tagname \[list \$rest\] {}} "
+							}
+						default {
+							set tagname \[lindex \$item 0\] ;# start tag
+							set rest \[lrange \[string map {= " "} \$item\] 1 end\]
+							lappend stack \$tagname
+							append res "\\{\$tagname \[list \$rest\] \\{"
+						}
+					}
+					if {\[llength \$rest\]%2} {log local0. "Airwatch Plugin: XML parse failure -- att's not paired: \$rest"}
+				}
+				string map {\"\\\} \\\}\" \"\\\}\\\}\"} \[lindex \$res 0\]
+				set result \[lindex \[join \$res\] end\]
+				set key {}
+				set value {}
+				foreach t "\$result" {
+				switch -- \[llength \$t\] {
+					2 { 
+						set t \[lindex \[split \[lindex \$t 1\] {=}\] 0\]
+					}
+					3 {
+						foreach { tag attributes children } \$t break
+						if \[llength \$children\] {
+							foreach child \$children {
+								switch -glob -- \$child {
+									default {
+										# PUBLISH GENERAL DEVICE INFORMATION
+										set value \$child
+										# Don't bother adding empty values to session variables
+										if { not (\$value == "") } {
+											set key \[string tolower \$tag\]
+											set value \[lindex \$value 1\]
+											# Create a session variable for each general device item
+											ACCESS::session data set -sid \$conn_sid "session.airwatch.device.security.\$key" "\$value"
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+				# Define that the session has been completed and returned valid data.
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection 1
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection_status "valid"
+			} else {
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection 0
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection_status "invalid"
+			}
+		}
+		"aw_device_network" {
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Doing Device Network." }
+			set conn_sid \[ACCESS::session sid\]
+			set conn \[connect -timeout 1500 -idle 30 -status conn_status \$static::${tmsh::app_name}_aw_virtual_name\]
+			if {\$conn eq ""} {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Connection not established with AW host." }
+				log local0. "Could not establish the connection. Please check to see whether DNS is set up properly on this LTM."
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection 0
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection_status "connect_failed"
+				return
+			}
+			set conn_info \[connect info -idle -status \$conn\]
+			set send_data {
+GET /api/v1/mdm/devices/\${conn_method}/\${conn_mac}/network HTTP/1.1
+Accept: text/html, application/xhtml+xml, */*
+User-Agent: F5-APM-sideband/1.0
+Host: \${static::${tmsh::app_name}_aw_host}
+Connection: Keep-Alive
+aw-tenant-code: \${static::${tmsh::app_name}_aw_tenantcode}
+Authorization: Basic \[b64encode "\${static::${tmsh::app_name}_aw_apiuser}:\${static::${tmsh::app_name}_aw_apipassword}"\]
+
+			}
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Sending message \[subst \$send_data\]" }
+			set send_info \[send -timeout 1500 -status send_status \$conn \[subst \$send_data\]\]
+			set recv_data \[recv -peek -status peek_status -timeout 3000 \$conn\]
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Collected response - \$peek_status - \$recv_data" }
+			if {\[string match "HTTP/1.1 200*\\r\\n\\r\\n*" \$recv_data\]} {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Matched expected response (200)." }
+				set success 1
+			} else {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Did not match expected response (200)." }
+				set success 0
+			}
+			close \$conn
+			if { \$success } {
+
+				# SUCCESSFUL DATA RETRIEVAL
+				# We're going to parse the XML data and seed it into the session database.
+			    set xml \$recv_data
+				# Strip the HTTP and XML headers and start parsing on the XML body.
+				# This procedure converts an XML document into a nested TCL list structure.
+				regsub {^HTTP.*\\r\\n\\r\\n} \$xml "" xml
+				regsub {^<.xml .*\\?>} \$xml "" xml
+				regsub -all {>\\s*<} \[string trim \$xml " \\n\\t<>"\] "\\} \\{" xml
+				set xml \[string map {> "\\} \\{#text \\{" < "\\}\\} \\{"}  \$xml\]
+				set res ""   ;# string to collect the result   
+				set stack {} ;# track open tags\\
+				set rest {}
+
+				foreach item "{\$xml}" {
+					switch -regexp -- \$item {
+						^# {
+							append res "{\[lrange \$item 0 end\]} " ; #text item
+							}
+						^/ {
+							regexp {/(.+)} \$item -> tagname ;# end tag
+							set expected \[lindex \$stack end\]
+							if {\$tagname!=\$expected} {error "\$item != \$expected"}
+							set stack \[lrange \$stack 0 end-1\]
+							append res "\\}\\} "
+							}
+						/\$ { # singleton - start and end in one <> group
+							regexp {(\[^ \]+)( (.+))?/\$} \$item -> tagname - rest
+							set rest \[lrange \[string map {= " "} \$rest\] 0 end\]
+							append res "{\$tagname \[list \$rest\] {}} "
+							}
+						default {
+							set tagname \[lindex \$item 0\] ;# start tag
+							set rest \[lrange \[string map {= " "} \$item\] 1 end\]
+							lappend stack \$tagname
+							append res "\\{\$tagname \[list \$rest\] \\{"
+						}
+					}
+					if {\[llength \$rest\]%2} {log local0. "Airwatch Plugin: XML parse failure -- att's not paired: \$rest"}
+				}
+				string map {\"\\\} \\\}\" \"\\\}\\\}\"} \[lindex \$res 0\]
+				set result \[lindex \[join \$res\] end\]
+				set key {}
+				set value {}
+				foreach t "\$result" {
+				switch -- \[llength \$t\] {
+					2 { 
+						set t \[lindex \[split \[lindex \$t 1\] {=}\] 0\]
+					}
+					3 {
+						foreach { tag attributes children } \$t break
+						if \[llength \$children\] {
+							foreach child \$children {
+								switch -glob -- \$child {
+									default {
+										# PUBLISH GENERAL DEVICE INFORMATION
+										set value \$child
+										# Don't bother adding empty values to session variables
+										if { not (\$value == "") } {
+											set key \[string tolower \$tag\]
+											set value \[lindex \$value 1\]
+											# Create a session variable for each general device item
+											ACCESS::session data set -sid \$conn_sid "session.airwatch.device.network.\$key" "\$value"
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+				# Define that the session has been completed and returned valid data.
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection 1
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection_status "valid"
+			} else {
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection 0
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection_status "invalid"
+			}
+		}
+		"aw_device_user" {
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Doing Device User." }
+			set conn_sid \[ACCESS::session sid\]
+			set conn \[connect -timeout 1500 -idle 30 -status conn_status \$static::${tmsh::app_name}_aw_virtual_name\]
+			if {\$conn eq ""} {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Connection not established with AW host." }
+				log local0. "Could not establish the connection. Please check to see whether DNS is set up properly on this LTM."
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection 0
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection_status "connect_failed"
+				return
+			}
+			set conn_info \[connect info -idle -status \$conn\]
+			set send_data {
+GET /api/v1/mdm/devices/\${conn_method}/\${conn_mac}/user HTTP/1.1
+Accept: text/html, application/xhtml+xml, */*
+User-Agent: F5-APM-sideband/1.0
+Host: \${static::${tmsh::app_name}_aw_host}
+Connection: Keep-Alive
+aw-tenant-code: \${static::${tmsh::app_name}_aw_tenantcode}
+Authorization: Basic \[b64encode "\${static::${tmsh::app_name}_aw_apiuser}:\${static::${tmsh::app_name}_aw_apipassword}"\]
+
+			}
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Sending message \[subst \$send_data\]" }
+			set send_info \[send -timeout 1500 -status send_status \$conn \[subst \$send_data\]\]
+			set recv_data \[recv -peek -status peek_status -timeout 3000 \$conn\]
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Collected response - \$peek_status - \$recv_data" }
+			if {\[string match "HTTP/1.1 200*\\r\\n\\r\\n*" \$recv_data\]} {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Matched expected response (200)." }
+				set success 1
+			} else {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Did not match expected response (200)." }
+				set success 0
+			}
+			close \$conn
+			if { \$success } {
+
+				# SUCCESSFUL DATA RETRIEVAL
+				# We're going to parse the XML data and seed it into the session database.
+			    set xml \$recv_data
+				# Strip the HTTP and XML headers and start parsing on the XML body.
+				# This procedure converts an XML document into a nested TCL list structure.
+				regsub {^HTTP.*\\r\\n\\r\\n} \$xml "" xml
+				regsub {^<.xml .*\\?>} \$xml "" xml
+				regsub -all {>\\s*<} \[string trim \$xml " \\n\\t<>"\] "\\} \\{" xml
+				set xml \[string map {> "\\} \\{#text \\{" < "\\}\\} \\{"}  \$xml\]
+				set res ""   ;# string to collect the result   
+				set stack {} ;# track open tags\\
+				set rest {}
+
+				foreach item "{\$xml}" {
+					switch -regexp -- \$item {
+						^# {
+							append res "{\[lrange \$item 0 end\]} " ; #text item
+							}
+						^/ {
+							regexp {/(.+)} \$item -> tagname ;# end tag
+							set expected \[lindex \$stack end\]
+							if {\$tagname!=\$expected} {error "\$item != \$expected"}
+							set stack \[lrange \$stack 0 end-1\]
+							append res "\\}\\} "
+							}
+						/\$ { # singleton - start and end in one <> group
+							regexp {(\[^ \]+)( (.+))?/\$} \$item -> tagname - rest
+							set rest \[lrange \[string map {= " "} \$rest\] 0 end\]
+							append res "{\$tagname \[list \$rest\] {}} "
+							}
+						default {
+							set tagname \[lindex \$item 0\] ;# start tag
+							set rest \[lrange \[string map {= " "} \$item\] 1 end\]
+							lappend stack \$tagname
+							append res "\\{\$tagname \[list \$rest\] \\{"
+						}
+					}
+					if {\[llength \$rest\]%2} {log local0. "Airwatch Plugin: XML parse failure -- att's not paired: \$rest"}
+				}
+				string map {\"\\\} \\\}\" \"\\\}\\\}\"} \[lindex \$res 0\]
+				set result \[lindex \[join \$res\] end\]
+				set key {}
+				set value {}
+				foreach t "\$result" {
+				switch -- \[llength \$t\] {
+					2 { 
+						set t \[lindex \[split \[lindex \$t 1\] {=}\] 0\]
+					}
+					3 {
+						foreach { tag attributes children } \$t break
+						if \[llength \$children\] {
+							foreach child \$children {
+								switch -glob -- \$child {
+									default {
+										# PUBLISH GENERAL DEVICE INFORMATION
+										set value \$child
+										# Don't bother adding empty values to session variables
+										if { not (\$value == "") } {
+											switch -glob -- \$tag {
+												"DeviceUser" {
+													set key \[string tolower \[lindex \$value 0\]\]
+													set value \[lindex \[lindex \[lindex \$value 2\] 0\] 1\]
+													ACCESS::session data set -sid \$conn_sid "session.airwatch.device.user.\$key" "\$value"
+												}
+												default {
+													set key \[string tolower \$tag\]
+													set value \[lindex \$value 1\]
+													# Create a session variable for each general device item
+													if { not (\$value == "") } {
+														ACCESS::session data set -sid \$conn_sid "session.airwatch.device.user.\$key" "\$value"
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+				# Define that the session has been completed and returned valid data.
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection 1
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection_status "valid"
+			} else {
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection 0
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection_status "invalid"
+			}
+		}
+		"aw_device_gps" {
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Doing Device Location." }
+			set conn_sid \[ACCESS::session sid\]
+			set conn \[connect -timeout 1500 -idle 30 -status conn_status \$static::${tmsh::app_name}_aw_virtual_name\]
+			if {\$conn eq ""} {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Connection not established with AW host." }
+				log local0. "Could not establish the connection. Please check to see whether DNS is set up properly on this LTM."
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection 0
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection_status "connect_failed"
+				return
+			}
+			set conn_info \[connect info -idle -status \$conn\]
+			set send_data {
+GET /api/v1/mdm/devices/\${conn_method}/\${conn_mac}/gps HTTP/1.1
+Accept: text/html, application/xhtml+xml, */*
+User-Agent: F5-APM-sideband/1.0
+Host: \${static::${tmsh::app_name}_aw_host}
+Connection: Keep-Alive
+aw-tenant-code: \${static::${tmsh::app_name}_aw_tenantcode}
+Authorization: Basic \[b64encode "\${static::${tmsh::app_name}_aw_apiuser}:\${static::${tmsh::app_name}_aw_apipassword}"\]
+
+			}
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Sending message \[subst \$send_data\]" }
+			set send_info \[send -timeout 1500 -status send_status \$conn \[subst \$send_data\]\]
+			set recv_data \[recv -peek -status peek_status -timeout 3000 \$conn\]
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Collected response - \$peek_status - \$recv_data" }
+			if {\[string match "HTTP/1.1 200*\\r\\n\\r\\n*" \$recv_data\]} {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Matched expected response (200)." }
+				set success 1
+			} else {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Did not match expected response (200)." }
+				set success 0
+			}
+			close \$conn
+			if { \$success } {
+
+				# SUCCESSFUL DATA RETRIEVAL
+				# We're going to parse the XML data and seed it into the session database.
+			    set xml \$recv_data
+				# Strip the HTTP and XML headers and start parsing on the XML body.
+				# This procedure converts an XML document into a nested TCL list structure.
+				regsub {^HTTP.*\\r\\n\\r\\n} \$xml "" xml
+				regsub {^<.xml .*\\?>} \$xml "" xml
+				regsub -all {>\\s*<} \[string trim \$xml " \\n\\t<>"\] "\\} \\{" xml
+				set xml \[string map {> "\\} \\{#text \\{" < "\\}\\} \\{"}  \$xml\]
+				set res ""   ;# string to collect the result   
+				set stack {} ;# track open tags\\
+				set rest {}
+
+				foreach item "{\$xml}" {
+					switch -regexp -- \$item {
+						^# {
+							append res "{\[lrange \$item 0 end\]} " ; #text item
+							}
+						^/ {
+							regexp {/(.+)} \$item -> tagname ;# end tag
+							set expected \[lindex \$stack end\]
+							if {\$tagname!=\$expected} {error "\$item != \$expected"}
+							set stack \[lrange \$stack 0 end-1\]
+							append res "\\}\\} "
+							}
+						/\$ { # singleton - start and end in one <> group
+							regexp {(\[^ \]+)( (.+))?/\$} \$item -> tagname - rest
+							set rest \[lrange \[string map {= " "} \$rest\] 0 end\]
+							append res "{\$tagname \[list \$rest\] {}} "
+							}
+						default {
+							set tagname \[lindex \$item 0\] ;# start tag
+							set rest \[lrange \[string map {= " "} \$item\] 1 end\]
+							lappend stack \$tagname
+							append res "\\{\$tagname \[list \$rest\] \\{"
+						}
+					}
+					if {\[llength \$rest\]%2} {log local0. "Airwatch Plugin: XML parse failure -- att's not paired: \$rest"}
+				}
+				string map {\"\\\} \\\}\" \"\\\}\\\}\"} \[lindex \$res 0\]
+				set result \[lindex \[join \$res\] end\]
+				set key {}
+				set value {}
+				foreach t "\$result" {
+				switch -- \[llength \$t\] {
+					2 { 
+						set t \[lindex \[split \[lindex \$t 1\] {=}\] 0\]
+					}
+					3 {
+						foreach { tag attributes children } \$t break
+						if \[llength \$children\] {
+							foreach child \$children {
+								switch -glob -- \$child {
+									default {
+										# PUBLISH GENERAL DEVICE INFORMATION
+										set value \$child
+										# Don't bother adding empty values to session variables
+										if { not (\$value == "") } {
+											switch -glob -- \$tag {
+												"GpsCoordinate" {
+													set key \[string tolower \[lindex \$value 0\]\]
+													set value \[lindex \[lindex \[lindex \$value 2\] 0\] 1\]
+													if { \$value starts_with "-" } {
+														set value \[regsub {^-} \$value "(minus)"\]
+													}
+													ACCESS::session data set -sid \$conn_sid "session.airwatch.device.gps.\$key" "\$value"
+												}
+												default {
+													set key \[string tolower \$tag\]
+													set value \[lindex \$value 1\]
+													# Create a session variable for each general device item
+													if { not (\$value == "") } {
+														ACCESS::session data set -sid \$conn_sid "session.airwatch.device.gps.\$key" "\$value"
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+				# Define that the session has been completed and returned valid data.
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection 1
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection_status "valid"
+			} else {
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection 0
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection_status "invalid"
+			}
+		}
+		"aw_device_apps" {
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Doing Device Apps." }
+			set conn_sid \[ACCESS::session sid\]
+			set conn \[connect -timeout 1500 -idle 30 -status conn_status \$static::${tmsh::app_name}_aw_virtual_name\]
+			if {\$conn eq ""} {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Connection not established with AW host." }
+				log local0. "Could not establish the connection. Please check to see whether DNS is set up properly on this LTM."
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection 0
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection_status "connect_failed"
+				return
+			}
+			set conn_info \[connect info -idle -status \$conn\]
+			set send_data {
+GET /api/v1/mdm/devices/\${conn_method}/\${conn_mac}/apps HTTP/1.1
+Accept: text/html, application/xhtml+xml, */*
+User-Agent: F5-APM-sideband/1.0
+Host: \${static::${tmsh::app_name}_aw_host}
+Connection: Keep-Alive
+aw-tenant-code: \${static::${tmsh::app_name}_aw_tenantcode}
+Authorization: Basic \[b64encode "\${static::${tmsh::app_name}_aw_apiuser}:\${static::${tmsh::app_name}_aw_apipassword}"\]
+
+			}
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Sending message \[subst \$send_data\]" }
+			set send_info \[send -timeout 1500 -status send_status \$conn \[subst \$send_data\]\]
+			set recv_data \[recv -peek -status peek_status -timeout 3000 \$conn\]
+			if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Collected response - \$peek_status - \$recv_data" }
+			if {\[string match "HTTP/1.1 200*\\r\\n\\r\\n*" \$recv_data\]} {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Matched expected response (200)." }
+				set success 1
+			} else {
+				if { \$static::${tmsh::app_name}_aw_debug } { log local0. "\$sess_id - Did not match expected response (200)." }
+				set success 0
+			}
+			close \$conn
+			if { \$success } {
+
+				# SUCCESSFUL DATA RETRIEVAL
+				# We're going to parse the XML data and seed it into the session database.
+			    set xml \$recv_data
+				# Strip the HTTP and XML headers and start parsing on the XML body.
+				# This procedure converts an XML document into a nested TCL list structure.
+				regsub {^HTTP.*\\r\\n\\r\\n} \$xml "" xml
+				regsub {^<.xml .*\\?>} \$xml "" xml
+				regsub -all {>\\s*<} \[string trim \$xml " \\n\\t<>"\] "\\} \\{" xml
+				set xml \[string map {> "\\} \\{#text \\{" < "\\}\\} \\{"}  \$xml\]
+				set res ""   ;# string to collect the result   
+				set stack {} ;# track open tags\\
+				set rest {}
+
+				foreach item "{\$xml}" {
+					switch -regexp -- \$item {
+						^# {
+							append res "{\[lrange \$item 0 end\]} " ; #text item
+							}
+						^/ {
+							regexp {/(.+)} \$item -> tagname ;# end tag
+							set expected \[lindex \$stack end\]
+							if {\$tagname!=\$expected} {error "\$item != \$expected"}
+							set stack \[lrange \$stack 0 end-1\]
+							append res "\\}\\} "
+							}
+						/\$ { # singleton - start and end in one <> group
+							regexp {(\[^ \]+)( (.+))?/\$} \$item -> tagname - rest
+							set rest \[lrange \[string map {= " "} \$rest\] 0 end\]
+							append res "{\$tagname \[list \$rest\] {}} "
+							}
+						default {
+							set tagname \[lindex \$item 0\] ;# start tag
+							set rest \[lrange \[string map {= " "} \$item\] 1 end\]
+							lappend stack \$tagname
+							append res "\\{\$tagname \[list \$rest\] \\{"
+						}
+					}
+					if {\[llength \$rest\]%2} {log local0. "Airwatch Plugin: XML parse failure -- att's not paired: \$rest"}
+				}
+				string map {\"\\\} \\\}\" \"\\\}\\\}\"} \[lindex \$res 0\]
+				set result \[lindex \[join \$res\] end\]
+				set key {}
+				set value {}
+				foreach t "\$result" {
+				switch -- \[llength \$t\] {
+					2 { 
+						set t \[lindex \[split \[lindex \$t 1\] {=}\] 0\]
+					}
+					3 {
+						foreach { tag attributes children } \$t break
+						set valuelist ""
+						if \[llength \$children\] {
+							foreach child \$children {
+								switch -glob -- \$child {
+									default {
+										# PUBLISH GENERAL DEVICE INFORMATION
+										set value \$child
+										# Don't bother adding empty values to session variables
+										if { not (\$value == "") } {
+											set id ""
+											switch -glob -- \$tag {
+												"DeviceApps" {
+													set key \[string tolower \[lindex \$value 0\]\]
+													set value \[lindex \[lindex \[lindex \$value 2\] 0\] 1\]
+													if { \$value starts_with "-" } {
+														set value \[regsub {^-} \$value "(minus)"\]
+													}
+													if { \$key equals "applicationidentifier" } {
+														set id \[lindex \[lindex \[lindex \$child 2\] 0\] 1\]
+														foreach item \$valuelist {
+															set akey \[lindex \$item 0\]
+															set avalue \[lindex \$item 1\]
+															ACCESS::session data set -sid \$conn_sid "session.airwatch.device.apps.inventory.\[regsub -all {\\.} \$id "_"\].\$akey" "\$avalue"
+															set valuelist ""
+														}
+														ACCESS::session data set -sid \$conn_sid "session.airwatch.device.apps.inventory.\[regsub -all {\\.} \$id "_"\].applicationidentifier" "\$value"
+														break
+													}
+													append valuelist "{\$key \$value} "
+												}
+												default {
+													set key \[string tolower \$tag\]
+													set value \[lindex \$value 1\]
+													# Create a session variable for each general device item
+													if { not (\$value == "") } {
+														ACCESS::session data set -sid \$conn_sid "session.airwatch.device.apps.\$key" "\$value"
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+				# Define that the session has been completed and returned valid data.
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection 1
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection_status "valid"
+			} else {
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection 0
+				ACCESS::session data set -sid \$conn_sid session.airwatch.connection_status "invalid"
+			}
+		}
+	}
+}
+
+
+}
+#--------------------------------------------------------------------------------
+
+tmsh::create / ltm rule "${tmsh::app_name}_airwatch_apm_plugin" [subst $airwatch_apm_plugin_code]
+
+}
+
+proc setup_snat {} {
+    if { $::network__aw_snat_automap == $::YES_ANSWER } {
+          set ::snat "snat automap"
+    } elseif { $::network__aw_snat_automap == $::NO_ANSWER } {
+          set members \{
+          foreach member $::network__aw_snat_table {
+              append members [tmsh::get_field_value $member aw_snat_address]
+              append members " "
+          }
+          append members \}
+          set snatpool_name "${tmsh::app_name}_snatpool"
+          tmsh_create "/ ltm snatpool" "$snatpool_name members replace-all-with $members"
+          set ::snat "snatpool $snatpool_name"
+     }
+}
+
+proc configure_airwatch_apm_deployment { } {
+
+	# MAIN ACTION LOOP
+
+	# Initialize certain variables to seed them into the iRule
+	# configuration later. These values will be used if the sections
+	# to which they apply are not iApp configured.
+
+	set ::aw_server "null"
+	set ::aw_username "null"
+	set ::aw_password "null"
+	set ::aw_tenantcode "null"
+    set ::aw_resolver "null"
+	set ::aw_debug 0
+	if { $::network__aw_sideband_ip_auto == $::YES_ANSWER } {
+		set ::aw_sideband_ip [exec {/bin/bash} {-c} {while true; do LINK_LOCAL_IP="192.168.$(( $RANDOM % 255 + 1 )).$(( $RANDOM % 255 ))"; /bin/ping -q -r -W 1 -c 1 $LINK_LOCAL_IP 1>/dev/null; /sbin/arp -an | /bin/grep -q $LINK_LOCAL_IP; case "$?" in      1)  echo $LINK_LOCAL_IP; break;         ;; esac; done}]	
+	} else {
+	    set ::aw_sideband_ip $::network__aw_sideband_ip
+	}
+
+	# iApp setup will proceed as follows (in order):
+	#  - Figure out what to enable
+        #  - Create iRules
+	#  - Setup sideband SSL encryption VIP
+
+	collect_variables
+    setup_snat
+	setup_irules
+	setup_sideband
+}
+
+puts " "
+puts "Starting Airwatch APM Template..."
+puts " "
+puts "Application name: $tmsh::app_name"
+
+	# Determine whether the chosen iApp name is safe to use. 
+	# We don't want to create a name with unusable characters!
+
+if { [tmsh::run_proc f5.app_utils:is_safe_app_name "\"$tmsh::app_name\""] != true } {
+    puts "The app template name contained illegal characters."
+    error "The app template name contained illegal characters."
+}
+
+	# Start the main loop
+
+configure_airwatch_apm_deployment
+
+puts " "
+puts "Finished Airwatch APM Template..."
+puts " "
+            }
+#            macro {
+#            }
+            presentation {
+                ####################################
+## AIRWATCH APM IAPP PRESENTATION
+##
+
+section welcome {
+	message welcome "This iApp enables the ability to import Airwatch-collected device details into BIG-IP APM."
+}
+section airwatch {
+	string aw_hostname display "large" validator "FQDN" required
+	message aw_hostname_details "Only the fully-qualified hostname of the Airwatch server is required here. This hostname MUST be resolvable by the Sideband Resolver you input below."
+	string aw_username required
+	password aw_password required
+	message aw_password_details "Note that this password will be stored in the configuration and the generated iRule unencrypted."
+	string aw_tenantcode display "large" required
+	message aw_tenantcode_details "Your API key is found in your AirWatch server configuration under Menu -> System Settings -> System -> Advanced -> API -> REST API."
+    choice aw_debug display "small" default "No" {"Yes", "No"}
+}
+section network {
+	choice aw_sideband_ip_auto display "small" default "Yes" {"Yes", "No"}
+	message aw_sideband_ip_auto_details "Automatically assigning the IP address to the Sideband VS is the preferred method. It will not assign an address that is in use and will not enable this address to listen on any attached VLANs."
+	optional (aw_sideband_ip_auto == "No") {
+		string aw_sideband_ip validator "IpAddress"
+		message aw_sideband_ip_details "Enter the IP you wish to assign to the Sideband VIP. This IP does not (and should not be) routable, as the only consumer of the IP will be the sideband connection."
+	}
+    string aw_resolver validator "IpAddress" required
+	message aw_resolver_details "The DNS resolver address must point to a server that can successfully resolve your VSP hostname."
+	choice aw_snat_automap display "small" default "Yes" {"Yes", "No"}
+	optional (aw_snat_automap == "No") {
+		table aw_snat_table {
+			string aw_snat_address validator "IpAddress"
+		} 
+	}
+}
+
+text {
+	welcome "Introduction"
+	welcome.welcome "Airwatch APM Plugin Version 1.0"
+
+	airwatch "Airwatch Configuration"
+    airwatch.aw_hostname "Hostname"
+	airwatch.aw_hostname_details ""
+    airwatch.aw_username "API Username"
+    airwatch.aw_password "API Password"
+	airwatch.aw_password_details ""
+    airwatch.aw_tenantcode "API Key"
+	airwatch.aw_tenantcode_details ""
+	airwatch.aw_debug "Debug Mode"
+
+    network "Sideband Configuration"
+	network.aw_sideband_ip_auto "Automatically select an IP address for the Sideband VIP?"
+	network.aw_sideband_ip_auto_details ""
+	network.aw_sideband_ip "IP Address"
+	network.aw_sideband_ip_details ""
+    network.aw_resolver "DNS Resolver Address"
+	network.aw_resolver_details ""
+	network.aw_snat_automap "Use SNAT Automap for Outgoing Sideband?"
+	network.aw_snat_table "Enter the external IP source addresses you wish to assign to outgoing traffic. These addresses should belong to your external VLAN's network."
+	network.aw_snat_table.aw_snat_address "IP Address"
+
+}
+            }
+            role-acl none
+            run-as none
+        }
+    }
+    description none
+#    ignore-verification false
+    requires-bigip-version-max none
+    requires-bigip-version-min 11.2
+    requires-modules { apm }
+#    signing-key none
+#    tmpl-checksum none
+#    tmpl-signature none
+}
