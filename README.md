@@ -6,13 +6,13 @@ This project is dedicated to developing and sharing useful code for various F5 p
 
 &nbsp;&nbsp;
 
-## [/iapps](/iapps)
+## [/iApps](/iapps)
 **iApps** is a system framework for deploying services-based, template-driven configurations.
 &nbsp;&nbsp;
 
 &nbsp;&nbsp;
 
-## [/irules](/irules)
+## [/iRules](/irules)
 **iRules** is a highly customized scripting language allowing complete programmatic access to application traffic in real time.
 &nbsp;&nbsp;
 
@@ -20,3 +20,12 @@ This project is dedicated to developing and sharing useful code for various F5 p
 
 ## [/scripts](/scripts)
 Scripts for various tasks.
+&nbsp;&nbsp;
+
+&nbsp;&nbsp;
+
+## [/others](/irules)
+Other F5 Networks collaboration stuffs.
+&nbsp;&nbsp;
+
+&nbsp;&nbsp;
