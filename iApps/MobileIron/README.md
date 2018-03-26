@@ -1,5 +1,10 @@
-# AirWatch-iApp
-AirWatch iApp for F5 Networks APM module
+## iAPP for MobileIron on APM
 
-iApp to be used with <12.0 releases. Release >v12.0 already include AirWatch MDM agent.
-Comment 1
+2.2.1 - Updated to support ios11
+
+### WARNING
+
+
+It seems MobileIron stopped APIv1. So this iApp will not work anymore because APIv1 is used to retrieve device informations and compliancy. APIv2 was used to retrieve device in DB from its UDID.
+
+iApp has to be recoded in order to use APIv2 for complicancy check and enrollment check

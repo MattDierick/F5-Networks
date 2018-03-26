@@ -1,0 +1,672 @@
+#TMSH-VERSION: 11.6.0
+
+cli admin-partitions {
+    update-partition Common
+}
+sys application template /Common/f5.mobileiron_v2.2-apm {
+    actions {
+        definition {
+            html-help {
+                <p><b>MobileIron APM Plugin Template</b></p>
+<p>For improved readability, we suggest you click the Launch button to view the Help in a separate, resizable window.</p>
+<p>This template creates the SSL sideband and iRules necessary to enable calls from an APM Access Policy to a MobileIron VSP. Before you start: </p>
+<ul>
+  <li>Check System -> Resource Provisioning to ensure that APM (access policy manager) is
+    provisioned.</li>
+  <li>License and provision additional BIG-IP modules (if needed).</li>
+  <li>Ensure your BigIP system has the ability to connect outbound to your VSP on port 443. If your VSP is located on an external network to your APM instance, ensure that all necessary firewall rules are in place to allow this connectivity.</li>
+  <li>Ensure that the BigIP has the ability to pass DNS queries to the resolver you specify.</li>
+</ul>
+
+ <p><b>MobileIron Configuration</b><br />
+<p><i>Type of MobileIron Configuration</i><br />
+<ul>
+  <li><i>Standalone:</i> This mode is used when your VSP is self-hosted or has been deployed by your hosting provider as a standalone instance.</li>
+  <li><i>Hosted:</i> This mode supports the MobileIron cloud VSP offering. When selected, you can choose your VSP hostname from the dropdown list.</li>
+</ul>
+<p><i>VSP Hostname</i><br />
+<p>If you have selected a standalone configuration type, enter the hostname we will use to connect to your MobileIron VSP instance. This hostname must be resolvable by the DNS resolver entered as part of the Sideband Configuration. If you have selected a Hosted type, then you can choose the VSP host from the dropdown list.</p>
+<p><i>Enterprise ID (Hosted Only)</i><br />
+<p>For a Hosted installation, enter your configuration's Enterprise ID. This will ensure that the API calls are performed for your dedicated container. Your Enterprise Name is found in your MobileIron cloud container under Settings -> Preferences -> Enterprise Preferences. You must enter it exactly as it appears.</p>
+<p><i>VSP API Username</i><br />
+<p>Enter the username you've configured for API access at your VSP. Consult your MobileIron documentation to determine how to create an account there with the correct access rights.</p>
+<p><i>VSP API Password</i><br />
+<p>Enter the password for the API user account at your MobileIron VSP. Please note that this password will be stored in your BIG-IP configuration unencrypted, so please ensure necessary steps are taken to restrict access to your BIG-IP.</p>
+
+ <p><b>Sideband Configuration</b></p>
+ <p><i>Automatically Select IP</i><br />
+<p>By default, this iApp will attempt to select an address that will be used for the Sideband VS. To do so, it selects a random address in the 192.168.0.0/16 CIDR address space that it has determined is not in use at this time.</p>
+<p>Note that this address will NOT be routable from this BIG-IP - it is used only for the purposes on the sideband connection and will not be bound to any VLAN (and thus will not be able to be accessed outside this BIG-IP).</p>
+ <p><i>DNS Resolver</i><br />
+<p>Enter an IP address of a DNS resolver that is capable of resolving the IP address of the hostname you configured in the MobileIron Configuration section.</p>
+ <p><i>SNAT Automap</i><br />
+<p>By default, the system will initiate the sideband connection using a Self IP address that matches the interface where the routing table defines the connection should leave the BIG-IP. Normally, it is not necessary to change this behavior.</p>
+<p>However, if you need to override this setting and input a specific IP address from which connections should be initiated, you can configure it by selecting "No". Note that, in either case, you must ensure that your BIG-IP system has a correct routing configuration to reach your VSP.</p>
+            }
+            implementation {
+                #################################################################################
+### MOBILEIRON APM PLUGIN IAPP
+### Version: 2.3 - F5 Networks
+###
+### Functionality: Provides the ability to pull mobile device information
+###                from MobileIron VSP into F5 APM.
+###
+### Versions:
+###   1.0 - Initial release (jm)
+###   2.1 - Second release (Matthieu DIERICK, Patrick GOUBAND, Salvador DEL REAL) with combined APIv1 and APIv2
+###   2.2 - Updated to support ios11
+###
+### WARNING ##### READ BELOW #####
+### It seems MobileIron stopped APIv1. So this iApp will not work anymore because APIv1 is used to retrieve device informations and compliancy. APIv2 was used to retrieve device in DB from its UDID
+### iApp has to be recoded in order to use APIv2 for complicancy check and enrollment check
+
+
+# IAPP SETUP
+
+# Set up initial variables, subroutines and constants needed
+# to execute this iApp.
+
+tmsh::include "f5.app_utils"
+
+tmsh::log_dest file
+tmsh::log_level crit
+
+set NO_ANSWER "No"
+set YES_ANSWER "Yes"
+set WAN_OPTION "WAN"
+set EMPTY_STRING "EMPTY_STRING_NO_VALUE_PRESENT"
+set ADDR_FIELD "addr"
+set PORT_FIELD "port"
+set RATIO_FIELD "ratio"
+set CONNECTION_LIMIT_FIELD "connection_limit"
+set HOST_FIELD "host"
+set ONE_SPACE " "
+set HTTP_11_VERSION_STRING "\"Version 1.1\""
+
+proc tmsh_create { component arguments } {
+    regsub -all {\"} $arguments "\\\"" arguments
+    regsub -all {\[} $arguments "\\\[" arguments
+    regsub -all {\]} $arguments "\\\]" arguments
+    regsub -all {\$} $arguments "\\\$" arguments
+    tmsh::run_proc f5.app_utils:do_tmsh_create "\"$component\"" "\"$arguments\""
+}
+
+proc tmsh_modify { component arguments } {
+    regsub -all {\"} $arguments "\\\"" arguments
+    regsub -all {\[} $arguments "\\\[" arguments
+    regsub -all {\]} $arguments "\\\]" arguments
+    regsub -all {\$} $arguments "\\\$" arguments
+    tmsh::run_proc f5.app_utils:do_tmsh_modify "\"$component\"" "\"$arguments\""
+}
+
+proc collect_variables { } {
+# IAPP SETUP
+
+	# Go through the user input and decide what we need to do.
+
+	if { $::network__mi_snat_automap == $::YES_ANSWER } {
+		puts "Creating a SNAT pool."
+		set ::enable_snatpool 1
+	} else {
+		set ::enable_snatpool 0
+	}
+
+	switch -- $::mobileiron__mi_type {
+		"Standalone" {
+			puts "Standalone VSP mode selected."
+			set ::irule_hostname $::mobileiron__mi_hostname
+			set ::irule_enterprisename "/${::mobileiron__mi_enterprisename_standalone}/"
+            set ::irule_enterprisename_call2 "/"
+			set ::irule_username $::mobileiron__mi_username
+			set ::irule_password $::mobileiron__mi_password
+		}
+		"Hosted" {
+			puts "Hosted VSP mode selected."
+			set ::irule_hostname $::mobileiron__mi_hostname_hosted
+			set ::irule_enterprisename "/${::mobileiron__mi_enterprisename_hosted}/"
+        	set ::irule_enterprisename_call2 "/${::mobileiron__mi_enterprisename_hosted}/"
+			set ::irule_username $::mobileiron__mi_username_hosted
+			set ::irule_password $::mobileiron__mi_password_hosted
+		}
+	}
+
+}
+
+proc setup_sideband { } {
+	tmsh::create / ltm profile http ${tmsh::app_name}_http_sideband defaults-from http request-chunking preserve response-chunking unchunk
+	tmsh::create / ltm virtual ${tmsh::app_name}_sideband_80 destination ${::mi_sideband_ip}:80 profiles replace-all-with \{ tcp ${tmsh::app_name}_http_sideband serverssl-insecure-compatible \} snat automap rules \{ ${tmsh::app_name}_mobileiron_connector \} vlans-enabled
+	#tmsh::modify / ltm virtual-address "/Common/${::mi_sideband_ip}" arp disabled icmp-echo disabled
+}
+
+proc setup_irules { } {
+
+	set ::mi_virtual "/Common/${tmsh::app_name}.app/${tmsh::app_name}_sideband_80"
+
+#--------------------------------------------------------------------------------
+set mobileiron_connector_code {
+
+#############################################################
+## APM MobileIron Connector
+## Version: 2.2
+#
+# Applies to an internal VIP for use by the APM MobileIron
+# Support iRule. The IP does not need to be routable. This
+# VIP is intended to apply SSL to the MobileIron sideband
+# connection only.
+#
+# This rule will only accept HTTP connections outbound to the 
+# hostname configured in the apm_mobileiron_connector that 
+# come through the internal VIP-target. Even if an address is
+# chosen that is routable, all external connections will be
+# rejected.
+#
+# This VIP:80 -> HTTP -> serverssl -> Resolved MI VSP node:443
+
+when HTTP_REQUEST {
+	if { \[HTTP::host\] equals \$static::${tmsh::app_name}_mi_host && \[IP::remote_addr\] starts_with "127." } {
+		set mi_ips \[RESOLV::lookup @\$static::${tmsh::app_name}_mi_resolver \$static::${tmsh::app_name}_mi_host\]
+		set _miipaddress \[lindex \$mi_ips 0\]
+        if { \(\$_miipaddress equals ""\) } {
+			log local0. "MobileIron Sideband Error: Address lookup for \$static::${tmsh::app_name}_mi_host failed. Please check your DNS configuration."
+		} else {
+			node \$_miipaddress 443
+		}
+	} else { 
+		reject
+	}
+}
+
+}
+#--------------------------------------------------------------------------------
+
+
+tmsh::create / ltm rule "${tmsh::app_name}_mobileiron_connector" [subst $mobileiron_connector_code]
+
+
+#--------------------------------------------------------------------------------
+set mobileiron_apm_support_code {
+
+
+######################################################################
+## APM MobileIron Support Plug-in
+## Version: 2.2
+# Date October 5 2015 based on APIv2 for MobileIron 8.0
+#
+# Applies to an APM VIP to enable collection of policy data
+# from MobileIron VSP into the APM session database.
+#--------------------------------------------------------------------
+# Available Functions:
+#
+# - mi_device_details : request made to retrieve UUID based on UDID or Mac Address
+#
+# Call #1 to retrieve UUID from APIv2
+# Call #2 to retrieve mobile device detail from APIv1 
+##
+### WARNING ##### READ BELOW #####
+### It seems MobileIron stopped APIv1. So this iApp will not work anymore because this iApp uses APIv1 to retrieve device informations and compliancy. APIv2 is used in this iApp to retrieve the device in the MI DB.
+### iApp has to be recoded in order to use APIv2 only. 
+
+
+when RULE_INIT {
+
+	################################################################
+	# CONFIGURATION
+	# Only these settings can be modified.
+	#
+	# - Set VSP host details
+	set static::${tmsh::app_name}_mi_host "${::irule_hostname}"
+	#
+	# - Set username and password for API access
+	set static::${tmsh::app_name}_mi_apiuser "${::irule_username}"
+	set static::${tmsh::app_name}_mi_apipassword "${::irule_password}"
+	set static::${tmsh::app_name}_mi_enterprisename "${::irule_enterprisename}"
+        set static::${tmsh::app_name}_mi_enterprisename_call2 "${::irule_enterprisename_call2}"
+	#
+	# - Set name of SSL sideband handling virtual to use.
+	set static::${tmsh::app_name}_mi_virtual_name "${::mi_virtual}"
+	#
+	# - Set the IP address of a DNS resolver to use
+	set static::${tmsh::app_name}_mi_resolver "${::network__mi_resolver}"
+	#
+	# - Set a timeout for connecting to the MobileIron VSP
+	set static::${tmsh::app_name}_mi_timeout 300
+	#
+	# - Test MAC for enabling a demonstration.
+	# This will hardcode the MAC address used for
+	# queries when the "session.mobileiron.fake" variable
+	# is set to true (1).
+	set static::${tmsh::app_name}_test_mac "000000000000"
+	#
+	###############################################################
+
+        array set static::${tmsh::app_name}_compliance_codes {
+	0	"Device is in compliance."
+	1	"Device is compromised."
+	2	"OS version is less than the supported OS version."
+	4	"Hardware version is not allowed."
+	8	"Data Protection is not enabled."
+	16	"Policy is out of date."
+	32	"Device is out of contact."
+	64	"App control policy is out of compliance."
+	128	"Device exceeds per mailbox limit."
+	256	"Device is not registered."
+	512	"Device is manually blocked."
+	1024	"Exchange Reported."
+	2048	"Device administrator is deactivated."
+	4096	"Disallowed app control policy is out of compliance."
+	8012	"Required app control policy is out of compliance."
+	16384	"Allowed app control policy is out of compliance."
+	4194304	"Unknown reason."
+	}
+
+}
+
+when ACCESS_POLICY_AGENT_EVENT {
+
+####### CHECK DEVICE PLATFORM ##############
+####### UDID used to retrieve iOS ##########
+####### MAC ADDRESS used to retrieve Android #######
+
+	switch -glob \[ACCESS::session data get "session.client.platform"\] {
+	    		"Win8*" {
+	    			set conn_method "ios.iPhone%20UDID"
+					set conn_mac \[ACCESS::session data get "session.client.unique_id"\]
+	    		}
+	    		"iOS" {
+	    			switch -glob \[ACCESS::session data get "session.client.platform_version"\] {
+	    					"7.*" -
+	    					"8.*" -
+	    					"9.*" -
+	    					"10.*" -
+						"11.*" {
+	    							set conn_method "ios.iPhone%20UDID"
+									set conn_mac \[ACCESS::session data get "session.client.unique_id"\]
+	    					}
+	    				}
+					}
+	    		default {
+	    			set conn_method "common.wifi_mac_address"
+	    			set conn_mac \[regsub -all {:} \[ACCESS::session data get "session.client.mac_address"\] ""\]	
+	    		}
+
+	    	}
+
+####### FAKE ID to test irule ##############
+
+    set fake_session \[ACCESS::session data get "session.mobileiron.fake"\]
+	if { \$fake_session == 1 } {
+		log local0. "Using fake query MAC for Mobileiron API."
+		set conn_mac \$static::${tmsh::app_name}_test_mac
+	} 
+
+	switch \[ACCESS::policy agent_id\] {
+		"mi_device_details" {
+
+####### Call #1 to retrieve UUID - unique ID from MobileIron ##############
+
+			set conn_sid \[ACCESS::session sid\]
+			set conn \[connect -timeout 1500 -idle 30 -status conn_status \$static::${tmsh::app_name}_mi_virtual_name\]
+			if {\$conn eq ""} {
+				log local0. "Could not establish the connection. Please check to see whether DNS is set up properly on this LTM."
+				ACCESS::session data set -sid \$conn_sid session.mobileiron.connection 0
+				ACCESS::session data set -sid \$conn_sid session.mobileiron.connection_status "connect_failed"
+				return
+			}
+			set conn_info \[connect info -idle -status \$conn\]
+			set send_data {
+GET \${static::${tmsh::app_name}_mi_enterprisename}rest/api/v2/devices?adminDeviceSpaceId=1&fields=common.uuid&query=\\"\${conn_method}\\"=\\"\${conn_mac}\\" HTTP/1.1
+Accept: text/html, application/xhtml+xml, */*
+User-Agent: F5-APM-sideband/1.0
+Host: \${static::${tmsh::app_name}_mi_host}
+Connection: Keep-Alive
+Authorization: Basic \[b64encode "\${static::${tmsh::app_name}_mi_apiuser}:\${static::${tmsh::app_name}_mi_apipassword}"\]
+
+			}
+			set send_info \[send -timeout 1500 -status send_status \$conn \[subst \$send_data\]\]
+			set recv_data \[recv -peek -status peek_status -timeout 3000 \$conn\]
+			if {\[string match "HTTP/1.1 200*\\r\\n\\r\\n*" \$recv_data\]} {
+				set success 1
+			} else {
+				set success 0
+			}
+			close \$conn
+			if { \$success } {
+
+				# SUCCESSFUL DATA RETRIEVAL
+				# We're going to parse the XML data and seed it into the session database.
+
+			    set xml \$recv_data
+			    set result \[findstr \$xml "common.uuid" 14 36\]
+
+			# Define that the session has been completed and returned valid data.
+			ACCESS::session data set -sid \$conn_sid session.mobileiron.ios_uuid \$result
+
+							}   
+							
+###### Call #2 to retrieve device details from UUID collected previously for hosted ##############
+
+			set conn_mac \[ACCESS::session data get "session.mobileiron.ios_uuid"\]
+
+			set conn \[connect -timeout 1500 -idle 30 -status conn_status \$static::${tmsh::app_name}_mi_virtual_name\]
+			if {\$conn eq ""} {
+				log local0. "Could not establish the connection. Please check to see whether DNS is set up properly on this LTM."
+				ACCESS::session data set -sid \$conn_sid session.mobileiron.connection 0
+				ACCESS::session data set -sid \$conn_sid session.mobileiron.connection_status "connect_failed"
+				return
+			}
+
+			set conn_info \[connect info -idle -status \$conn\]
+			set send_data {
+GET \${static::${tmsh::app_name}_mi_enterprisename_call2}api/v1/dm/devices/\${conn_mac} HTTP/1.1
+Accept: text/html, application/xml, */*
+User-Agent: F5-APM-sideband/1.0
+Host: \${static::${tmsh::app_name}_mi_host}
+Connection: Keep-Alive
+Authorization: Basic \[b64encode "\${static::${tmsh::app_name}_mi_apiuser}:\${static::${tmsh::app_name}_mi_apipassword}"\]
+
+			}
+
+			set send_info \[send -timeout 1500 -status send_status \$conn \[subst \$send_data\]\]
+			set recv_data \[recv -peek -status peek_status -timeout 3000 \$conn\]
+			if {\[string match "HTTP/1.1 200*\\r\\n\\r\\n*" \$recv_data\]} {
+				set success 1
+			} else {
+				set success 0
+			}
+			close \$conn
+			
+
+			if { \$success } {
+
+				# SUCCESSFUL DATA RETRIEVAL
+				# We're going to parse the XML data and seed it into the session database.
+
+			    set xml \$recv_data
+
+				# Strip the HTTP and XML headers and start parsing on the XML body.
+				# This procedure converts an XML document into a nested TCL list structure.
+				regsub {^HTTP.*\\r\\n\\r\\n} \$xml "" xml
+				regsub {^<.xml .*\\?>} \$xml "" xml
+				regsub -all {>\\s*<} \[string trim \$xml " \\n\\t<>"\] "\\} \\{" xml
+				set xml \[string map {> "\\} \\{#text \\{" < "\\}\\} \\{"}  \$xml\]
+				set res ""   ;# string to collect the result   
+				set stack {} ;# track open tags\\
+				set rest {}
+
+				foreach item "{\$xml}" {
+					switch -regexp -- \$item {
+						^# {
+							append res "{\[lrange \$item 0 end\]} " ; #text item
+							}
+						^/ {
+							regexp {/(.+)} \$item -> tagname ;# end tag
+							set expected \[lindex \$stack end\]
+							if {\$tagname!=\$expected} {error "\$item != \$expected"}
+							set stack \[lrange \$stack 0 end-1\]
+							append res "\\}\\} "
+							}
+						/\$ { # singleton - start and end in one <> group
+							regexp {(\[^ \]+)( (.+))?/\$} \$item -> tagname - rest
+							set rest \[lrange \[string map {= " "} \$rest\] 0 end\]
+							append res "{\$tagname \[list \$rest\] {}} "
+							}
+						default {
+							set tagname \[lindex \$item 0\] ;# start tag
+							set rest \[lrange \[string map {= " "} \$item\] 1 end\]
+							lappend stack \$tagname
+							append res "\\{\$tagname \[list \$rest\] \\{"
+						}
+					}
+
+					if {\[llength \$rest\]%2} {log local0. "MobileIron Plugin: XML parse failure -- att's not paired: \$rest"}
+					}
+				string map {\"\\\} \\\}\" \"\\\}\\\}\"} \[lindex \$res 0\]
+				set result \[lindex \[join \$res\] end\]
+				set key {}
+				set value {}
+
+				foreach t "mobileiron \$result" {
+				switch -- \[llength \$t\] {
+					2 { 
+						set t \[lindex \[split \[lindex \$t 1\] {=}\] 0\]
+					}
+					3 {
+						foreach { tag attributes children } \$t break
+						if \[llength \$children\] {
+							foreach child \$children {
+								switch -glob -- \$child {
+									"details *" {
+										# PUBLISH DETAILED DEVICE INFORMATION
+										foreach d "\$child" {
+											foreach e "\$d" {
+												set value "\[lindex \[lindex \[lindex \[lindex \[lindex \$e 2\] 1\] 2\] 0\] 1\]"
+												# Don't bother adding empty values to session variables
+												if { \$value == "" } { break }
+												# Session variables don't like to be set with leading dashes - perhaps this is a BZ
+												if { \$value starts_with "-" } {
+													set value \[regsub {^-} \$value "(minus)"\]
+												}
+												set key "\[regsub -all { } \[string tolower \[lindex \[lindex \[lindex \[lindex \[lindex \$e 2\] 0\] 2\] 0\] 1\]\] "_"\]"
+												# Create a session variable for each device detail item
+												ACCESS::session data set -sid \$conn_sid "session.mobileiron.device.details.\$key" "\$value"
+											}
+										}
+									}
+									default {
+										# PUBLISH GENERAL DEVICE INFORMATION
+										set value \[lindex \$child 2\]
+										# Don't bother adding empty values to session variables
+										if { not (\$value == "") } {
+											set key \[string tolower \[lindex \[split \$child { }\] 0\]\]
+											set value \[lindex \[lindex \$value 0\] 1\]
+											# Create a session variable for each general device item
+											ACCESS::session data set -sid \$conn_sid "session.mobileiron.device.\$key" "\$value"
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			# Define that the session has been completed and returned valid data.
+			ACCESS::session data set -sid \$conn_sid session.mobileiron.connection 1
+			ACCESS::session data set -sid \$conn_sid session.mobileiron.connection_status "valid"
+			# Attempt to decode the reason for a compliance failure; add the textual reason as a session variable
+			set compliance_code \[ACCESS::session data get -sid \$conn_sid session.mobileiron.device.compliance\]
+                        if { \$compliance_code == "" } {
+                            set compliance_code 256
+                         }			
+                        if { not \$compliance_code == 0 } {
+				set val_out {}
+				foreach i \[array names static::${tmsh::app_name}_compliance_codes\] {
+					if { (\[expr { \$compliance_code & \$i }\] != 0) && ( \$compliance_code >= \$i ) } {
+						append val_out "\$static::${tmsh::app_name}_compliance_codes(\$i) "
+					}
+				}
+				ACCESS::session data set -sid \$conn_sid session.mobileiron.device.compliancereason "\$val_out"	
+			} else {
+				ACCESS::session data set -sid \$conn_sid session.mobileiron.device.compliancereason "Device is in compliance."
+			}
+			} else {
+				ACCESS::session data set -sid \$conn_sid session.mobileiron.connection 0
+				ACCESS::session data set -sid \$conn_sid session.mobileiron.connection_status "invalid"
+			}
+
+
+#### FIN MI_DEVICE_DETAILS #####
+						}  
+					}
+			}
+#--------------------------------------------------------------------------------
+}
+
+tmsh::create / ltm rule "${tmsh::app_name}_mobileiron_apm_support" [subst $mobileiron_apm_support_code]
+
+}
+
+proc setup_snat {} {
+    if { $::network__mi_snat_automap == $::YES_ANSWER } {
+          set ::snat "snat automap"
+    } elseif { $::network__mi_snat_automap == $::NO_ANSWER } {
+          set members \{
+          foreach member $::network__mi_snat_table {
+              append members [tmsh::get_field_value $member mi_snat_address]
+              append members " "
+          }
+          append members \}
+          set snatpool_name "${tmsh::app_name}_snatpool"
+          tmsh_create "/ ltm snatpool" "$snatpool_name members replace-all-with $members"
+          set ::snat "snatpool $snatpool_name"
+     }
+}
+
+proc configure_mobileiron_apm_deployment { } {
+
+	# MAIN ACTION LOOP
+
+	# Initialize certain variables to seed them into the iRule
+	# configuration later. These values will be used if the sections
+	# to which they apply are not iApp configured.
+
+	set ::mi_server "null"
+	set ::mi_username "null"
+	set ::mi_password "null"
+    set ::mi_resolver "null"
+	set ::mi_debug 0
+	if { $::network__mi_sideband_ip_auto == $::YES_ANSWER } {
+		set ::mi_sideband_ip [exec {/bin/bash} {-c} {while true; do LINK_LOCAL_IP="192.168.$(( $RANDOM % 255 + 1 )).$(( $RANDOM % 255 ))"; /bin/ping -q -r -W 1 -c 1 $LINK_LOCAL_IP 1>/dev/null; /sbin/arp -an | /bin/grep -q $LINK_LOCAL_IP; case "$?" in      1)  echo $LINK_LOCAL_IP; break;         ;; esac; done}]	
+	} else {
+	    set ::mi_sideband_ip $::network__mi_sideband_ip
+	}
+
+	# iApp setup will proceed as follows (in order):
+	#  - Figure out what to enable
+        #  - Create iRules
+	#  - Setup sideband SSL encryption VIP
+
+	collect_variables
+    setup_snat
+	setup_irules
+	setup_sideband
+}
+
+puts " "
+puts "Starting MobileIron APM Template..."
+puts " "
+puts "Application name: $tmsh::app_name"
+
+	# Determine whether the chosen iApp name is safe to use. 
+	# We don't want to create a name with unusable characters!
+
+if { [tmsh::run_proc f5.app_utils:is_safe_app_name "\"$tmsh::app_name\""] != true } {
+    puts "The app template name contained illegal characters."
+    error "The app template name contained illegal characters."
+}
+
+	# Start the main loop
+
+configure_mobileiron_apm_deployment
+
+puts " "
+puts "Finished MobileIron APM Template..."
+puts " "
+            }
+            macro {
+            }
+            presentation {
+                ####################################
+## MOBILEIRON APM IAPP PRESENTATION
+##
+
+section welcome {
+	message welcome "This iApp enables the ability to import MobileIron VSP-collected device details into BIG-IP APM."
+	message welcome1 "VSP version 5.5 or greater is required for this functionality."
+}
+section mobileiron {
+	choice mi_type display "medium" default "Standalone" {"Standalone", "Hosted"}
+    optional (mi_type == "Standalone") {
+		string mi_hostname display "large" validator "FQDN" required
+		message mi_hostname_details "Only the fully-qualified hostname of the VSP is required here. This hostname MUST be resolvable by the Sideband Resolver you input below."
+		string mi_enterprisename_standalone display "large" required
+		message mi_enterprisename_details_standalone "Your Enterprise Name equals to the PATH without starting and ending / characters (i.e demo/admin)"
+		string mi_username required
+		password mi_password required
+		message mi_password_details "Note that this password will be stored in the configuration and the generated iRule unencrypted."
+	}
+	optional (mi_type == "Hosted") {
+		choice mi_hostname_hosted display "large" default "m.mobileiron.net" {"m.mobileiron.net", "au.mobileiron.net", "de.mobileiron.net"}
+		message mi_hostname_details_hosted "This hostname MUST be resolvable by the Sideband Resolver you input below."
+		string mi_enterprisename_hosted display "large" required
+		message mi_enterprisename_details_hosted "Your Enterprise Name is found in your MobileIron cloud container under Settings -> Preferences -> Enterprise Preferences. You must enter it exactly as it appears."
+		string mi_username_hosted required
+		password mi_password_hosted required
+		message mi_password_details_hosted "Note that this password will be stored in the configuration and the generated iRule unencrypted."
+	}
+
+}
+section network {
+	choice mi_sideband_ip_auto display "small" default "Yes" {"Yes", "No"}
+	message mi_sideband_ip_auto_details "Automatically assigning the IP address to the Sideband VS is the preferred method. It will not assign an address that is in use and will not enable this address to listen on any attached VLANs."
+	optional (mi_sideband_ip_auto == "No") {
+		string mi_sideband_ip validator "IpAddress"
+		message mi_sideband_ip_details "Enter the IP you wish to assign to the Sideband VIP. This IP does not (and should not be) routable, as the only consumer of the IP will be the sideband connection."
+	}
+    string mi_resolver validator "IpAddress" required
+	message mi_resolver_details "The DNS resolver address must point to a server that can successfully resolve your VSP hostname."
+	choice mi_snat_automap display "small" default "Yes" {"Yes", "No"}
+	optional (mi_snat_automap == "No") {
+		table mi_snat_table {
+			string mi_snat_address validator "IpAddress"
+		} 
+	}
+}
+
+text {
+	welcome "Introduction"
+	welcome.welcome "MobileIron APM Plugin v2.0"
+	welcome.welcome1 ""
+
+	mobileiron "MobileIron VSP Configuration"
+	mobileiron.mi_type "Type of MobileIron VSP Configuration"
+    mobileiron.mi_hostname "VSP Hostname"
+	mobileiron.mi_hostname_details ""
+    mobileiron.mi_username "VSP API Username"
+    mobileiron.mi_password "VSP API Password"
+	mobileiron.mi_password_details ""
+	mobileiron.mi_hostname_hosted "VSP Hostname"
+	mobileiron.mi_enterprisename_hosted "Enterprise ID"
+	mobileiron.mi_enterprisename_details_hosted ""
+	mobileiron.mi_enterprisename_standalone "Enterprise ID"
+	mobileiron.mi_enterprisename_details_standalone ""
+	mobileiron.mi_hostname_details_hosted ""
+    mobileiron.mi_username_hosted "VSP API Username"
+    mobileiron.mi_password_hosted "VSP API Password"
+	mobileiron.mi_password_details_hosted ""
+
+    network "Sideband Configuration"
+	network.mi_sideband_ip_auto "Automatically select an IP address for the Sideband VIP?"
+	network.mi_sideband_ip_auto_details ""
+	network.mi_sideband_ip "IP Address"
+	network.mi_sideband_ip_details ""
+    network.mi_resolver "DNS Resolver Address"
+	network.mi_resolver_details ""
+	network.mi_snat_automap "Use SNAT Automap for Outgoing Sideband?"
+	network.mi_snat_table "Enter the external IP source addresses you wish to assign to outgoing traffic. These addresses should belong to your external VLAN's network."
+	network.mi_snat_table.mi_snat_address "IP Address"
+
+}
+            }
+            role-acl none
+            run-as none
+        }
+    }
+    description none
+    ignore-verification false
+    requires-bigip-version-max none
+    requires-bigip-version-min 11.2
+    requires-modules { apm }
+    signing-key none
+    tmpl-checksum none
+    tmpl-signature none
+}
