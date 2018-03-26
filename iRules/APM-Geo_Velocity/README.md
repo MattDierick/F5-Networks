@@ -1,4 +1,4 @@
-# F5 Networks
+# iRule Geo Velocity by Paolo Di Liberto (F5 Italy)
 
 
 This irule uses APM + ASM. It is called Geo-Velocity and User-Scoring. It allows to control where the user connects from and if this user is changing location to fast.
