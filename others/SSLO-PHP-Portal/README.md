@@ -1,6 +1,6 @@
 This is a delegation portal for F5 SSL Orchestrator build with MEAN stack framework (MongoDB, ExpressJS, AngularJS, NodeJs) and Angular Material for UI, providing delegation capacties for some BIGIP features like Datagroup entries.
 
-![alt tag](https://github.com/MattDierick/F5-SSLO-Portal/blob/master/ScreenShot.png)
+![alt tag](https://github.com/MattDierick/F5-Networks/blob/master/others/SSLO-PHP-Portal/ScreenShot.png?raw=true)
 
 Portal is providing a delegated interface storing infos in Mongo Database, and pushing modification through BIGIP V12 REST interface.
 
