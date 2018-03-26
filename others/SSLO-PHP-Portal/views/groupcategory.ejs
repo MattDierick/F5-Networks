@@ -1,0 +1,75 @@
+  <div>
+    <md-card flex="nogrow">
+      <md-toolbar class="md-table-toolbar md-default">
+        <div class="md-toolbar-tools">
+          <span>Edit Categories for {{group.name}} </span>
+        </div>
+      </md-toolbar>
+      <md-table-container>
+        <table md-table   md-progress="promise">
+          <thead md-head >
+            <tr md-row>
+              <th md-column md-numeric>#</th>
+              <th md-column >Categories</th>
+              <th md-column ></th>
+            </tr>
+          </thead>
+          <tbody md-body>
+            <tr md-row ng-repeat="category in urlcategories">
+              <td md-cell>{{$index+1}}</td>
+              <td md-cell><p class="md-body-2">{{category.name}}</p></td>
+              <td><md-checkbox aria-label="category.name" ng-checked="existscat(category.name, group.category)" ng-click="togglecat(category.name, group.category)"></td>
+            </tr>
+           </tbody>
+        </table>
+      </md-table-container>
+    </md-card>
+  </div>
+  <div>
+    <md-card flex="nogrow">
+      <md-toolbar class="md-table-toolbar md-default">
+        <div class="md-toolbar-tools">
+          <span>Edit ACLs for {{group.name}} </span>
+        </div>
+      </md-toolbar>
+      <md-table-container>
+        <table md-table   md-progress="promise">
+          <thead md-head >
+            <tr md-row>
+              <th md-column md-numeric>#</th>
+              <th md-column >ACLs</th>
+              <th md-column ></th>
+            </tr>
+          </thead>
+          <tbody md-body>
+            <tr md-row ng-repeat="acl in acls">
+              <td md-cell>{{$index+1}}</td>
+              <td md-cell><p class="md-body-2">{{acl.name}}</p></td>
+              <td><md-checkbox aria-label="acl.name" ng-checked="existsacl(acl.name, group.acl)" ng-click="toggleacl(acl.name, group.acl)"></td>
+            </tr>
+           </tbody>
+        </table>
+      </md-table-container>
+    </md-card>
+  </div>
+  <div>
+    <md-button class="md-primary" ng-click="showhint=true" ng-hide="showhint">
+      <i class="material-icons">&#xE8FD;</i>
+    </md-button>
+    <md-card  style="min-width:0px;max-width:200px;" ng-show="showhint">
+      <md-toolbar   class="md-table-toolbar md-default" >
+        <div class="md-toolbar-tools" >
+            <span>Hints</span>
+            <md-button class="md-primary" ng-click="showhint=false" >
+              <i class="material-icons" style="color:rgb(63,81,181);">&#xE8FD;</i>
+            </md-button>
+        </div>
+      </md-toolbar>
+      <md-content  flex="auto" layout-padding>
+        <p class="md-body-1">Here we setup Portal groups</p>
+        <p class="md-body-1">Groups define which category a user can access to</p>
+        <p class="md-body-1">Groups cannot be deleted</p>
+        <p class="md-body-1">Keep Allcategories with all categories and acls accessible as it is used by admins</p>
+      </md-content>
+    </md-card>
+  </div>

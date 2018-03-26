@@ -1,0 +1,31 @@
+<div flex layout="row"  layout-sm="column" layout-align="top left">
+  <div >
+      <md-card>
+        <md-toolbar class="md-table-toolbar md-default" >
+          <div class="md-toolbar-tools" layout-align="center center">
+            <span>ASM Management {{asmconfigform.$valid}}</span>
+          </div>
+        </md-toolbar>
+        <form name="asmconfigform" >
+          <div layout="column " layout-align="center center">
+              <md-input-container class="md-block" flex-gt-xs>
+                <label>ASM IP:</label>
+                <input ng-model="asm.ip" required >
+            </md-input-container>
+            <md-input-container class="md-block" flex-gt-xs>
+                <label>ASM Username:</label>
+                <input ng-model="asm.username" required>
+            </md-input-container>
+            <md-input-container class="md-block" flex-gt-xs>
+                <label>ASM Password:</label>
+                <input type="password" ng-model="asm.password" required >
+            </md-input-container>
+            <div flex="nogrow" layout-align="center center">
+              <md-button type="submit" class="md-primary" ng-click="asmconfigform.$valid && changeasmconfig()">Update asm config
+              </md-button>
+            </div>
+          </div>
+        </form>
+      </md-card>
+  </div>
+</div>

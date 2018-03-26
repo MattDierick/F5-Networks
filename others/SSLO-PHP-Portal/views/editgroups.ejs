@@ -1,0 +1,46 @@
+<div layout="row" flex layout-sm="column">
+  <div flex="nogrow">
+    <md-card >
+      <md-toolbar class="md-table-toolbar md-default">
+        <div class="md-toolbar-tools">
+          <span>Add a Group of Users</span>
+        </div>
+      </md-toolbar>
+      <md-table-container >
+        <table md-table   md-progress="promise">
+          <thead md-head >
+            <tr md-row>
+              <th md-column md-numeric>#</th>
+              <th md-column >Groups</th>
+            </tr>
+          </thead>
+          <tbody md-body>
+            <tr md-row  ng-repeat="group in groups">
+               <td md-cell>{{$index+1}}</td>
+               <td md-cell><md-button class="md-primary" href='#/editgroups/groupcategories/{{group.name}}'>{{group.name}}</md-button></td>
+             </tr>
+           </tbody>
+        </table>
+      </md-table-container>
+      <md-content layout-padding>
+        <div >
+          <form name="newGroupform">
+            <div layout="row" layout-align="center center" flex="nogrow" >
+              <md-input-container >
+                <label>Add Group:</label>
+                <md-icon md-font-icon="material-icons">&#xE150;</md-icon>
+                <input name="newgroup" ng-model="newgroup.groupname">
+              </md-input-container>
+              <div flex="nogrow" layout-align="center center">
+                <md-button type="submit" class="md-primary"
+                  ng-class="{'md-raised md-hue-1': (newGroupform.$dirty && newGroupform.$valid) }"
+                  ng-click="addGroup()">Add Group</md-button>
+                </div>
+            </div>
+        </form>
+      </div>
+      </md-content>
+    </md-card>
+  </div>
+  <div ui-view layout="row"></div>
+</div>

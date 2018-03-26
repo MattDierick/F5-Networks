@@ -1,0 +1,28 @@
+<div layout="row" flex layout-sm="column">
+  <div flex="nogrow">
+    <md-card >
+      <md-toolbar class="md-table-toolbar md-default" >
+        <div class="md-toolbar-tools">
+          <span>ASM Policies</span>
+        </div>
+      </md-toolbar>
+      <md-table-container >
+        <table md-table  >
+          <thead md-head >
+            <tr md-row>
+              <th md-column md-numeric>#</th>
+              <th md-column >Policies</th>
+            </tr>
+          </thead>
+          <tbody md-body>
+            <tr md-row  ng-repeat="policy in policies">
+               <td md-cell>{{$index+1}}</td>
+               <td md-cell><md-button aria-label="edit Policy" class="md-primary" href='#/policies/{{$index}}'>{{policy.name}}</md-button></td>
+             </tr>
+           </tbody>
+        </table>
+      </md-table-container>
+    </md-card>
+  </div>
+  <div ui-view layout=row></div>
+<div>

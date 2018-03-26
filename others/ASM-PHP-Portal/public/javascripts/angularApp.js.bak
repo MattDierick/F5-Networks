@@ -1,0 +1,241 @@
+var app = angular.module('ApmPortal', ['ui.router','ngMaterial','md.data.table']);
+
+
+app.config([
+'$stateProvider',
+'$urlRouterProvider',
+function($stateProvider, $urlRouterProvider) {
+  $stateProvider
+  .state('logout', {
+    url: '/logout',
+    templateUrl: '',
+    controller: 'AuthCtrl',
+    resolve: {
+      logoutpromise: [ 'auth', function(auth){
+        return auth.logOut();
+      }]
+    },
+    onEnter: ['$state', function($state){
+      $state.go('index');
+    }]
+  })
+  .state('index', {
+    url: '/index',
+    templateUrl: 'index.html',
+    controller: 'MainCtrl',
+    onEnter: ['$state', 'auth', function($state, auth){
+      if(auth.isLoggedIn()){
+        $state.go('category');
+      } else {
+        $state.go('login');
+      }
+    }]
+  })
+
+    .state('category', {
+      url: '/category',
+      templateUrl: 'categories.html',
+      controller: 'MainCtrl',
+      resolve: {
+        categoriesPromise: ['urlcategories', function(urlcategories){
+          return urlcategories.getAll();
+        }]
+      },
+      onEnter: ['$state', 'auth', function($state, auth){
+        if(!auth.isLoggedIn()){
+          $state.go('login');
+        }
+      }]
+
+    })
+    .state('urlcategories', {
+      url: '/urlcategories/{id}',
+      templateUrl: '/urlcategories.html',
+      controller: 'UrlcategoriesCtrl',
+      onEnter: ['$state', 'auth', function($state, auth){
+        if(!auth.isLoggedIn()){
+          $state.go('login');
+        }
+      }]
+    })
+    .state('login', {
+      url: '/login',
+      templateUrl: '/login.html',
+      controller: 'AuthCtrl',
+      onEnter: ['$state', 'auth', function($state, auth){
+        if(auth.isLoggedIn()){
+          $state.go('category');
+        }
+      }]
+    })
+    .state('register', {
+      url: '/register',
+      templateUrl: '/register.html',
+      controller: 'AuthCtrl',
+    });
+
+    //$urlRouterProvider.otherwise('home');
+    $urlRouterProvider.otherwise('index');
+  }]);
+
+  //managing user authentication
+  app.factory('auth', ['$http', '$window', function($http, $window){
+    var auth = {};
+    auth.saveToken = function (token){
+     $window.localStorage['flapper-news-token'] = token;
+    };
+
+    auth.getToken = function (){
+      //console.log("local token "+$window.localStorage['flapper-news-token']);
+      return $window.localStorage['flapper-news-token'];
+    };
+
+    auth.isLoggedIn = function(){
+      var token = auth.getToken();
+      //console.log("is logged?");
+      if(token){
+        var payload = JSON.parse($window.atob(token.split('.')[1]));
+          //console.log("yes logged");
+          return payload.exp > Date.now() / 1000;
+
+      } else {
+        //console.log("no not logged");
+        return false;
+      }
+    };
+
+    auth.currentUser = function(){
+      if(auth.isLoggedIn()){
+        var token = auth.getToken();
+        var payload = JSON.parse($window.atob(token.split('.')[1]));
+
+        return payload.username;
+      }
+    };
+
+    auth.register = function(user){
+      return $http.post('/register', user).success(function(data){
+        auth.saveToken(data.token);
+      });
+    };
+
+    auth.logIn = function(user){
+      return $http.post('/login', user).success(function(data){
+        auth.saveToken(data.token);
+      });
+    };
+
+    auth.logOut = function(){
+      $window.localStorage.removeItem('flapper-news-token');
+      return;
+    };
+
+    return auth;
+  }])
+
+  app.controller('AuthCtrl', ['$scope','$state','auth',function($scope, $state, auth){
+    $scope.user = {};
+
+    $scope.register = function(){
+      auth.register($scope.user).error(function(error){
+        $scope.error = error;
+      }).then(function(){
+        $state.go('index');
+      });
+    };
+
+    $scope.logIn = function(){
+      auth.logIn($scope.user).error(function(error){
+        $scope.error = error;
+      }).then(function(){
+        $state.go('index');
+      });
+    };
+  }])
+
+app.controller('NavCtrl', ['$scope','auth',function($scope, auth){
+    $scope.isLoggedIn = auth.isLoggedIn;
+    $scope.currentUser = auth.currentUser;
+    //$scope.logOut = auth.logOut;
+  }]);
+
+app.factory('urlcategories', ['$http', 'auth', function($http, auth){
+  var o = {
+    urlcategories: []
+  };
+  //create a category ------ a tester
+  o.create = function(urlcategory) {
+    return $http.post('/urlcategories', urlcategory, {headers: {Authorization: 'Bearer '+auth.getToken()}}).success(function(data){
+      o.urlcategories.push(data);
+    });
+  };
+  //get all categories
+  o.getAll = function() {
+    return $http.get('/urlcategories', {headers: {Authorization: 'Bearer '+auth.getToken()}}).success(function(data){
+      angular.copy(data, o.urlcategories);
+    });
+
+  };
+  //adding url to a category
+  o.addurl = function(urlcategory,arrayid,url) {
+    return $http.put('/urlcategories/'+urlcategory._id,{url: url.name}, {headers: {Authorization: 'Bearer '+auth.getToken()}}).success(function(data){
+      angular.copy(data.urls,o.urlcategories[arrayid].urls);
+    });
+  }
+  o.removeurl = function(urlcategory,arrayid,urlid) {
+    return $http.delete('/urlcategories/'+urlcategory._id+"/"+urlid, {headers: {Authorization: 'Bearer '+auth.getToken()}}).success(function(data){
+      angular.copy(data.urls,o.urlcategories[arrayid].urls);
+    });
+  }
+  return o;
+}]);
+
+app.controller('UrlcategoriesCtrl', [
+  '$scope',
+  '$stateParams',
+  'urlcategories',
+  '$animate',
+  'auth',
+  function($scope, $stateParams, urlcategories, $animate,auth){
+    $scope.urlcategory = urlcategories.urlcategories[$stateParams.id];
+    $scope.newurl="";
+    $scope.urlalert="";
+    $scope.addUrl = function(form){
+      //checing if requested url already exists
+      function isurlpresent(arrayofjsonurl,lookedurl) {
+        for(var k in arrayofjsonurl) {
+          if(arrayofjsonurl[k].name == lookedurl) {
+            $scope.urlalert="The requested url is already present in this category";
+            return 1;
+          }
+        }
+
+        return 0;
+      };// function isurlpresent
+
+      if($scope.newurl === '' || isurlpresent($scope.urlcategory.urls,$scope.newurl)) {
+
+        return;
+      }
+
+      //we call the function with urlcategory , urlcategory array number in urlcaterories, form parm containing url
+      urlcategories.addurl($scope.urlcategory,$stateParams.id,{name:$scope.newurl });
+      $scope.newurl=null;
+
+    };
+    $scope.removeUrl = function(urlid){
+      urlcategories.removeurl($scope.urlcategory,$stateParams.id,urlid);
+      $scope.newurl=null;
+    };
+}]);
+
+app.controller('MainCtrl', [
+'$scope','$mdSidenav','urlcategories','auth',
+function($scope, $mdSidenav,urlcategories,auth){
+
+  $scope.urlcategories = urlcategories.urlcategories;
+  $scope.menufabisOpen = false;
+  
+
+
+}]);

@@ -1,0 +1,57 @@
+<div flex layout="row"  layout-sm="column">
+  <div>
+    <md-card>
+      <md-toolbar class="md-table-toolbar md-default" >
+        <div class="md-toolbar-tools" layout-align="center center">
+          <span>Register new User</span>
+        </div>
+      </md-toolbar>
+      <form name="RegisterInform" >
+        <div layout-gt-xs="column " layout-align="center center">
+          <md-input-container class="md-block" flex-gt-xs required>
+              <label>Username:</label>
+              <input ng-model="user.username" name="username" required/>
+          </md-input-container>
+          <md-input-container class="md-block" flex-gt-xs>
+              <label>Password:</label>
+              <input ng-model="user.password" name="password" required/>
+          </md-input-container>
+          <md-input-container>
+            <label>User Group:</label>
+            <md-select ng-model="user.group" multiple required>
+              <md-option ng-repeat="group in groups" ng-value="group.name">{{group.name}}</md-option>
+            </md-select>
+          </md-input-container>
+          <md-checkbox ng-model="user.isadmin" name="isadmin" aria-label="Admin rigths">
+            Is Admin?
+          </md-checkbox>
+          <div flex="nogrow" layout-align="center center">
+            <md-button type="submit" class="md-primary" ng-class="{'md-raised md-hue-1': (RegisterInform.$dirty && RegisterInform.$valid) }" ng-click="RegisterInform.$valid && register(RegisterInform)">Register
+            </md-button>
+          </div>
+        </div>
+      </form>
+    </md-card>
+  </div>
+  <div>
+    <md-button class="md-primary" ng-click="showhint=true" ng-hide="showhint">
+      <md-icon >&#xE8FD;</md-icon >
+    </md-button>
+    <md-card  style="min-width:0px;max-width:200px;" ng-show="showhint">
+      <md-toolbar   class="md-table-toolbar md-default" >
+        <div class="md-toolbar-tools" >
+            <span>Hints</span>
+            <md-button class="md-primary" ng-click="showhint=false" >
+              <md-icon style="color:rgb(63,81,181);">&#xE8FD;</md-icon >
+            </md-button>
+        </div>
+      </md-toolbar>
+      <md-content  flex="auto" layout-padding>
+        <p class="md-body-1">Here we setup Portal users, not APM admin users</p>
+        <p class="md-body-1">Portal groups are defined in the "Edit groups" menu</p>
+        <p class="md-body-1">Users cannot be deleted</p>
+        <p class="md-body-1">Admin rigth means user can create users, edit groups and manage APM</p>
+      </md-content>
+    </md-card>
+  </div>
+</div>

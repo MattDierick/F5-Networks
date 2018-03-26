@@ -1,0 +1,42 @@
+<div>
+  <md-card flex="nogrow">
+    <md-toolbar class="md-table-toolbar md-default" >
+      <div class="md-toolbar-tools" >
+          <span>Policy: {{currentpolicy.name}}</span>
+          <span flex></span>
+          <md-progress-circular md-diameter='50%' md-mode="indeterminate" ng-hide="progressbar"></md-progress-circular>
+      </div>
+    </md-toolbar>
+    <md-table-container >
+      <table md-table >
+        <thead md-head >
+          <tr md-row>
+            <th md-column md-numeric>#</th>
+            <th md-column >Signatures</th>
+             <!--<th md-column >ID</th>-->
+            <th md-column style="text-align:center;">
+              <md-button class="md-icon-button" aria-label="Push to APM" ng-click="showConfirmasmpush($event)">
+                <md-tooltip>Push to ASM</md-tooltip>
+                <i class="material-icons" style="color:rgb(63,81,181);font:bold;" >&#xE2C6;</i>
+              </md-button>
+              <md-button class="md-icon-button" aria-label="Pull from APM" ng-click="showConfirmasmpull($event)">
+                <md-tooltip>Pull from ASM</md-tooltip>
+                <i class="material-icons" style="color:rgb(63,81,181);font:bold;">&#xE2C4;</i>
+              </md-button>
+            </th>
+          </tr>
+        </thead>
+        <tbody md-body>
+          <tr md-row  ng-repeat="signatureset in signaturesets" align=center>
+             <td md-cell>{{$index+1}}</td>
+             <td md-cell><p  class="md-body-2" >{{signatureset.name}}</p></td>
+             <!--<td md-cell><p  class="md-body-2" >{{signatureset.id}}</p></td>-->
+             <td md-cell  flex style="text-align:center;">
+               <md-checkbox  aria-label="signaturecheck" ng-checked="sigactive(signatureset.id)" ng-click="togglesig(signatureset.id)"></td>
+             </td>
+           </tr>
+         </tbody>
+      </table>
+    </md-table-container>
+  </md-card>
+</div>

@@ -1,0 +1,88 @@
+<div>
+  <md-card flex="nogrow" flex="70">
+    <md-toolbar class="md-table-toolbar md-default" >
+      <div class="md-toolbar-tools" >
+          <span>ACL: {{acl.name}}</span>
+          <span flex></span>
+          <md-progress-circular md-diameter='50%' md-mode="indeterminate" ng-hide="progressbar"></md-progress-circular>
+      </div>
+    </md-toolbar>
+    <md-table-container >
+      <table md-table   md-progress="promise">
+        <thead md-head >
+          <tr md-row>
+            <th md-column md-numeric>#</th>
+            <th md-column >ACLs</th>
+            <th md-column style="text-align:center;">
+              <md-button class="md-icon-button" aria-label="Push to APM" ng-click="showConfirmpush($event)">
+                <md-tooltip>Push to APM</md-tooltip>
+                <i class="material-icons"  style="color:rgb(63,81,181);font:bold;" >&#xE2C6;</i>
+              </md-button>
+              <md-button class="md-icon-button" aria-label="Pull from APM" ng-click="showConfirmpull($event)">
+                <md-tooltip>Pull from APM</md-tooltip>
+                <i class="material-icons"  style="color:rgb(63,81,181);font:bold;">&#xE2C4;</i>
+              </md-button>
+            </th>
+          </tr>
+        </thead>
+        <tbody md-body>
+          <tr md-row  ng-repeat="entry in acl.entries">
+             <td md-cell>{{$index+1}}</td>
+             <td md-cell><p  class="md-body-2" >{{entry.dstSubnet}}  {{"port " + entry.dstStartPort}} {{entry.dstEndPort === entry.dstStartPort ? "" : "to " + entry.dstEndPort}}</p></td>
+             <td md-cell ng-click="removeAclentry(entry._id)" flex><i class="material-icons"  style="display: inline-block;text-align:center; width: 100%;">delete</i></td>
+           </tr>
+         </tbody>
+      </table>
+    </md-table-container>
+    <md-content >
+      <div>
+        <form name="newAclform">
+          <div layout="column" layout-align="center center" flex="nogrow" >
+            <div layout="row" layout-align="center center" >
+              <md-input-container >
+                <label>ACL Destination:</label>
+                <md-icon md-font-icon="material-icons">&#xE150;</md-icon>
+                <input name="newacl.dstSubnet" ng-model="newacl.dstSubnet" required>
+              </md-input-container>
+              <md-input-container flex="20">
+                <label>Port Start:</label>
+                <input type="number" name="newacl.dstStartPort" ng-model="newacl.dstStartPort" required>
+              </md-input-container>
+
+              <md-input-container flex="20">
+                <label>Port End:</label>
+              <input type="number" name="newacl.dstEndPort" ng-model="newacl.dstEndPort">
+              </md-input-container>
+            </div>
+            <div flex="nogrow" layout-align="center center">
+              <md-button type="submit" class="md-primary"
+                ng-class="{'md-raised md-hue-1': (newAclform.$dirty && newAclform.$valid) }"
+                ng-click="newAclform.$valid && addAcl(newAclform)">Add ACL</md-button>
+            </div>
+          </div>
+      </form>
+    </div>
+    </md-content>
+  </md-card>
+</div>
+<div>
+  <md-button class="md-primary" ng-click="showhint=true" ng-hide="showhint">
+    <i class="material-icons">&#xE8FD;</i>
+  </md-button>
+  <md-card  style="min-width:0px;max-width:200px;" ng-show="showhint">
+    <md-toolbar   class="md-table-toolbar md-default" >
+      <div class="md-toolbar-tools" >
+          <span>Hints</span>
+          <md-button class="md-primary" ng-click="showhint=false" >
+            <i class="material-icons" style="color:rgb(63,81,181);">&#xE8FD;</i>
+          </md-button>
+      </div>
+    </md-toolbar>
+    <md-content  flex="auto" layout-padding>
+      <p class="md-body-1">ACL must be defined as an IP address, with optional subnet /x, if no subnet provided will be /32</p>
+      <p class="md-body-1">Port end parameter is optional</p>
+      <p class="md-body-1">Changes are not updated automatically to APM, use arrow up icon to push to APM</p>
+      <p class="md-body-1">If you want to retrieve APM acl configuration, use arrow down icon to pull from APM</p>
+      </md-content>
+  </md-card>
+</div>

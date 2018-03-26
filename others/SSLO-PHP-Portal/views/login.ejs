@@ -1,0 +1,24 @@
+  <md-card>
+     <md-toolbar class="md-table-toolbar md-default" >
+        <div class="md-toolbar-tools" layout-align="center center">
+          <span>Login</span>
+        </div>
+      </md-toolbar>
+      <form name="logInform" >
+
+        <div layout="column " layout-align="center center">
+          <md-input-container class="md-block" flex-gt-xs>
+              <label>Username:</label>
+              <input ng-model="user.username" required>
+          </md-input-container>
+          <md-input-container class="md-block" flex-gt-xs>
+              <label>Password:</label>
+              <input ng-model="user.password" required>
+          </md-input-container>
+          <div flex="nogrow" layout-align="center center">
+            <md-button type="submit" class="md-primary" ng-class="{'md-raised md-hue-1': (newUrlform.$dirty && newUrlform.$valid) }" ng-click="logInform.$valid && logIn()">Log In
+            </md-button>
+          </div>
+        </div>
+      </form>
+    </md-card>

@@ -1,0 +1,28 @@
+<div layout="row" flex layout-sm="column">
+  <div flex="nogrow">
+    <md-card>
+      <md-toolbar class="md-table-toolbar md-default" >
+        <div class="md-toolbar-tools">
+          <span>ACL List</span>
+        </div>
+      </md-toolbar>
+      <md-table-container >
+        <table md-table>
+          <thead md-head>
+            <tr md-row>
+              <th md-column md-numeric>#</th>
+              <th md-column>ACLs</th>
+            </tr>
+          </thead>
+          <tbody md-body>
+            <tr md-row  ng-repeat="acl in acls">
+               <td md-cell>{{$index+1}}</td>
+               <td md-cell><md-button aria-label="edit ACL" class="md-primary" href='#/acls/editacl/{{$index}}'>{{acl.name}}</md-button></td>
+             </tr>
+           </tbody>
+        </table>
+      </md-table-container>
+    </md-card>
+  </div>
+  <div ui-view layout=row></div>
+<div>
