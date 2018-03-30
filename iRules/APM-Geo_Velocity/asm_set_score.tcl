@@ -6,8 +6,8 @@ when ASM_REQUEST_VIOLATION
         log local0. "ASM VIOLATION!"
         set vdetails [ASM::violation_data]
         set srcip [lindex $vdetails 4]
-        
-        
+
+
         #verify src IP in  violators table and update the table accordingly
         set ipviolations [table lookup -subtable "violators" $srcip]
         if { $ipviolations != "" } {
@@ -20,12 +20,11 @@ when ASM_REQUEST_VIOLATION
             log local0. "This is the first violation from IP $srcip. Adding a Table record"
             table set -subtable "violators" $srcip 1 1800
         }
-        
+
         #verify if an APM session exists, check against APM violators and update the table accordingly
-        if { [HTTP::cookie exists LastMRH_Session] } { 
-            set mrh_cookie [HTTP::cookie value LastMRH_Session]
-            set sid [ACCESS::session sid]
-            set baduser [ACCESS::session data get -sid $sid "session.logon.last.username"]
+        if { [HTTP::header exists session-id] } { 
+            log local0. "APM Session exists"
+            set baduser [HTTP::header value username]
             if { $baduser != "" } {
                 log local0. "violation from APM session: $baduser"
                 set usersviolations [table lookup -subtable "badusers" $baduser]
@@ -42,5 +41,5 @@ when ASM_REQUEST_VIOLATION
             }
         }
     }
-    
+
 }
