@@ -2,10 +2,61 @@ when RULE_INIT {
     set static::geoloc_timeout 1800
     set static::allowedViolations 3
 }
-    
-when CLIENT_ACCEPTED {
-    set static::lpub [HSL::open -publisher /Common/Splunk_APM_HSL_Pub]
+
+#### The section below is only used in case of SNAT in front of the APM. The ACCESS_SESSION_STARTED event will set the XFF as source IP@ and will set Geoloc and IP reputation
+
+when ACCESS_SESSION_STARTED
+{
+        set clientIP [HTTP::header x-forwarded-for]
+        log local0. "clientIP: $clientIP"
+        ACCESS::session data set session.user.clientip $clientIP
+
+        set ip_reputation_categories [IP::reputation $clientIP]
+        ACCESS::session data set session.custom.iprep 0
+
+        if {($ip_reputation_categories contains "Windows Exploits")} {
+	        ACCESS::session data set session.custom.iprep 1 
+	        } 
+        if {($ip_reputation_categories contains "Web Attacks")} {  
+		    ACCESS::session data set session.custom.iprep 1 
+	        } 
+	    if {($ip_reputation_categories contains "Scanners")}{  
+		    ACCESS::session data set session.custom.iprep 1 
+	        } 
+	    if {($ip_reputation_categories contains "Proxy")}{  
+		    ACCESS::session data set session.custom.iprep 1
+	        }
+	    if {($ip_reputation_categories contains "Tor")}{  
+		    ACCESS::session data set session.custom.iprep 1
+	         }
+	    if {($ip_reputation_categories contains "Spam")}{  
+		    ACCESS::session data set session.custom.iprep 1
+         }
+
+        log local0. "IP $clientIP is in continent [lindex [whereis $clientIP] 0] and country [lindex [whereis $clientIP] 1]"
+
+        ACCESS::session data set session.custom.country [lindex [whereis $clientIP] 1]
 }
+
+### End of section for SNAT use case
+
+### The section below HTTP_REQUEST will reset the counters for demo purpose
+
+when HTTP_REQUEST
+{
+    if {[HTTP::uri] starts_with "/reset" }
+        {
+        log local0. "RESET Table"
+        table delete -all -subtable geoloc
+        table delete -all -subtable violators
+        table delete -all -subtable badusers
+        }
+
+}
+
+### End of section
+
+
 
 when ACCESS_POLICY_AGENT_EVENT {
     set policyid [ACCESS::policy agent_id]
@@ -15,29 +66,25 @@ when ACCESS_POLICY_AGENT_EVENT {
     set geocheck [whereis $user_addr country]
 
     switch [ACCESS::policy agent_id] {
-        
+
         apm_alert_geovelocity {
             set user_name [ACCESS::session data get "session.logon.last.username"]
             set checkgeo [table lookup -subtable geoloc -notouch $username]
             log local0. "GEOVELOCITY ALERT!! User $user_name with IP $user_addr connected from $geocheck after connecting from $checkgeo"
-            HSL::send $static::lpub "GEOVELOCITY ALERT!! User $user_name with IP $user_addr connected from $geocheck after connecting from $checkgeo"
         }
         apm_alert_badip {
-            log local0. "BAD REPUTATION IP ALERT!! Connection from BAD IP $user_addr, [IP::reputation $user_addr]"
-            HSL::send $static::lpub "BAD REPUTATION IP ALERT!! Connection from BAD IP $user_addr, [IP::reputation $user_addr]"
+            log local0. "BAD REPUTATION IP or LOW IP SCORE ALERT!! Connection from BAD IP $user_addr, [IP::reputation $user_addr]"
         }
-        
+
         apm_alert_badgeo {
             log local0. "GEOCHECK ALERT!! Connection from unallowed country from IP  $user_addr, country is $geocheck"
-            HSL::send $static::lpub "GEOCHECK ALERT!! Connection from unallowed country from IP  $user_addr, country is $geocheck"
         }
-        
+
         apm_alert_baduser {
             set user_name [ACCESS::session data get "session.logon.last.username"]
             log local0. "BAD USER ALERT!! User $user_name with IP $user_addr connected from $geocheck has bad reputation"
-            HSL::send $static::lpub "BAD USER ALERT!! User $user_name with IP $user_addr connected from $geocheck has bad reputation"
         }
-        
+
         geo_set {
             set username [ACCESS::session data get session.logon.last.username]
             set ipadd [ACCESS::session data get session.user.clientip]
@@ -48,7 +95,7 @@ when ACCESS_POLICY_AGENT_EVENT {
             set checkgeo [table lookup -subtable geoloc -notouch $username]
             log local0. "checkgeo is $checkgeo"
         }
-        
+
         geo_vel_check {
             set username [ACCESS::session data get session.logon.last.username]
     	    set ipadd [ACCESS::session data get session.user.clientip]
@@ -64,8 +111,8 @@ when ACCESS_POLICY_AGENT_EVENT {
     		    ACCESS::session data set session.custom.geoalert 0
     	    }
         }
-        
-        asm_reputation_check {
+
+        IP_asm_reputation_check {
             set srcip [ACCESS::session data get session.user.clientip]
             set userViolation [table lookup -subtable "violators" $srcip]
             if { $userViolation > $static::allowedViolations } {
@@ -77,46 +124,41 @@ when ACCESS_POLICY_AGENT_EVENT {
                 ACCESS::session data set session.custom.lowasmrepu 0
             }
         }
-        
-        apm_check_user_score {
-            #retrieve username and ip address
+
+        USER_asm_reputation_check {
+            #retrieve username
             set username [ACCESS::session data get "session.logon.last.username"]
-            set srcip [ACCESS::session data get session.user.clientip]
-        
-            #search for violation per IP and username
-            set ipviolations [table lookup -subtable "violators" $srcip]
+            
+            #search for violation per username
             set userviolations [table lookup -subtable "badusers" $username]
-        
-            # if *both* username and IP address have bad reputation, set session variable to 1
-            # the idea is to block just the bad user even if users share an ip address (e.g. snat)
-            # and block the one using stolen credentials (from bad ip) and not the real user
-            if { $ipviolations > $static::allowedViolations && $userviolations > $static::allowedViolations } {
-                log local0. "user $username @ $srcip has Bad Reputation..do something!"
-                ACCESS::session data set session.custom.user.badrepu 1
+
+            if { $userviolations > $static::allowedViolations } {
+                log local0. "user $username has Bad Reputation !"
+                ACCESS::session data set session.custom.user.baduserrepu 1
             }
             else {
-                log local0. "user request ok"
-                ACCESS::session data  set session.custom.user.badrepu 0
+                log local0. "user $username is ok"
+                ACCESS::session data  set session.custom.user.baduserrepu 0
             }
         }
-        
+
         clear_user_score {
             set username [ACCESS::session data get "session.logon.last.username"]
             log local0. "User $username score cleared"
             table delete -subtable "badusers" $username
         }
-        
+
     }
 }
 
 
 when ACCESS_PER_REQUEST_AGENT_EVENT {
      set id [ACCESS::perflow get perflow.irule_agent_id]
-     
+
      #retrieve username and ip address
      set username [ACCESS::session data get "session.logon.last.username"]
      set srcip [ACCESS::session data get session.user.clientip]
-     
+
      #search for violation per IP and username
      set ipviolations [table lookup -subtable "violators" $srcip]
      set userviolations [table lookup -subtable "badusers" $username]
@@ -125,9 +167,15 @@ when ACCESS_PER_REQUEST_AGENT_EVENT {
          #log local0. "PerFlow User Reputation Check"
          ACCESS::perflow set perflow.custom 0
          if { $ipviolations > $static::allowedViolations && $userviolations > $static::allowedViolations } {
-                log local0. "PerFlow user $username @ $srcip has Bad Reputation..do something!"
+                #log local0. "PerFlow user $username @ $srcip has Bad Reputation..do something!"
                 ACCESS::perflow set perflow.custom 1
             }
-          
+        }
+     if { $id eq "reset_counters" }
+     {
+        table delete -subtable "badusers" $username
+        table delete -subtable "violators" $srcip
      }
+
+
  }
