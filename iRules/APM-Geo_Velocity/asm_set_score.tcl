@@ -31,6 +31,7 @@ when ASM_REQUEST_VIOLATION
                 if { $usersviolations != "" } {
                     log local0. "User $baduser has already $usersviolations violations"
                     incr usersviolations
+                    # pdiliberto - adding a limit on the violation increment
                     table replace -subtable "badusers" $baduser $usersviolations 1800
                     log local0. "Table updated with $usersviolations violations"
                 }
