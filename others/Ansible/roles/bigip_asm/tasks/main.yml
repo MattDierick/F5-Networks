@@ -1,0 +1,21 @@
+#- name: Import ASM policy from template Fundamental
+#  bigip_asm_policy:
+#    name: ASM_Fundamental
+#    template: Fundamental
+#    active: yes
+#    state: present
+#  delegate_to: localhost
+
+- name: Create an ASM Policy based on a Template and apply it to a VS
+  f5_asmPolicy_template:
+#   server: 10.1.1.6
+#   user: admin
+#   password: admin
+   partition: Common
+   name: Fouad_lib_Policy
+   description: "This is an ASM Policy created automatically based on RDP"
+   virtual: VS_web
+   lang: "utf-8"
+   enforcementMode: "blocking"
+   policyTemplate: EzpBNMs9gbVsF5uuiBjYDw
+  delegate_to: localhost

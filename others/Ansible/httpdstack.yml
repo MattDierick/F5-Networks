@@ -1,0 +1,28 @@
+---
+
+- name: Install httpd only
+  hosts: servers
+  vars:
+    http_port: 80
+    max_clients: 200
+  become: true
+  become_user: root
+  tasks:
+  - name: ensure apache is at the latest version
+    package: name=apache2 state=present
+  - name: write the apache config file
+    template:
+      src: /srv/http_start.conf
+      dest: /etc/httpd.conf
+    notify:
+    - restart apache
+  - name: ensure apache is running (and enable it at boot)
+    service:
+      name: apache2
+      state: started
+      enabled: yes
+  handlers:
+    - name: restart apache
+      service:
+        name: apache2
+        state: restarted

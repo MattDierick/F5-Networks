@@ -1,0 +1,81 @@
+- name: "Create VLAN"
+  vars:
+   vlan_conf:
+    - { tag: "10", if: "1.1" }
+    - { tag: "20", if: "1.2" }
+
+  bigip_vlan:
+   name: "VLAN_{{ item.tag }}"
+   tag: "{{ item.tag }}"
+   untagged_interfaces: "{{ item.if }}"
+   state: present
+  with_items: "{{ vlan_conf }}"
+  delegate_to: localhost
+  
+
+- name: "Create SELF and assign VLAN"
+  bigip_selfip:
+   address: "{{ item.address }}"
+   name: "SELF_{{ item.name }}"
+   netmask: "{{ item.netmask }}"
+   vlan: "{{ item.vlan }}"
+  with_items:
+   - address: 10.1.10.6
+     name: front
+     netmask: 255.255.255.0
+     vlan: VLAN_10
+   - address: 10.1.20.6
+     name: back
+     netmask: 255.255.255.0
+     vlan: VLAN_20
+  delegate_to: localhost
+
+- name: "Create a pool with HTTP monitor"
+
+  bigip_pool:
+   lb_method: round-robin
+   name: "Pool_{{ app_name }}" 
+   slow_ramp_time: 120
+   state: present
+   partition: Common
+   monitor_type: single
+   monitors:
+    - http
+  delegate_to: localhost
+
+- name: "Add a member in the pool"
+
+  bigip_pool_member:
+   pool: "Pool_{{ app_name }}"
+   partition: Common
+   host: 10.1.20.5
+   port: 80
+   description: Ubuntu UDF
+   connection_limit: 100
+   rate_limit: 50
+   ratio: 2
+  delegate_to: localhost
+
+- name: Add virtual server
+  bigip_virtual_server:
+    state: present
+    partition: Common
+    name: "VS_{{ app_name }}"
+    destination: 10.1.10.100
+    port: 443
+    pool: "Pool_{{ app_name }}"
+    snat: Automap
+    description: Test Virtual Server
+    profiles:
+      - http
+      - name: clientssl
+        context: client-side
+      - name: serverssl
+        context: server-side
+#    policies:
+#      - my-ltm-policy-for-asm
+#      - ltm-uri-policy
+#      - ltm-policy-2
+#      - ltm-policy-3
+    enabled_vlans: all
+  delegate_to: localhost

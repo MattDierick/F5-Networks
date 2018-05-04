@@ -1,0 +1,14 @@
+---
+- name: Big-IP example
+  hosts: f5
+  gather_facts: no
+  environment:
+   F5_PASSWORD: admin
+   F5_USER: admin
+   F5_SERVER: "{{ inventory_hostname }}"
+   F5_VALIDATE_CERTS: False
+  vars:
+   app_name: web
+  roles:
+  - bigip
+  - bigip_asm
