@@ -1,0 +1,149 @@
+{
+    "http-index_template": {
+        "order": 0,
+        "template": "http-index*",
+        "settings": {},
+        "mappings": {
+            "http-log": {
+                "properties": {
+                    "referer": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "ignore_above": 256,
+                                "type": "keyword"
+                            }
+                        }
+                    },
+                    "request": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "ignore_above": 256,
+                                "type": "keyword"
+                            }
+                        }
+                    },
+                    "virtual": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "ignore_above": 256,
+                                "type": "keyword"
+                            }
+                        }
+                    },
+                    "method": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "ignore_above": 256,
+                                "type": "keyword"
+                            }
+                        }
+                    },
+                    "version": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "ignore_above": 256,
+                                "type": "keyword"
+                            }
+                        }
+                    },
+                    "response_size": {
+                        "type": "integer"
+                    },
+                    "client_port": {
+                        "type": "integer"
+                    },
+                    "path": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "ignore_above": 256,
+                                "type": "keyword"
+                            }
+                        }
+                    },
+                    "hostname": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "ignore_above": 256,
+                                "type": "keyword"
+                            }
+                        }
+                    },
+                    "@timestamp": {
+                        "type": "date"
+                    },
+                    "syslog_hostname": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "ignore_above": 256,
+                                "type": "keyword"
+                            }
+                        }
+                    },
+                    "port": {
+                        "type": "integer"
+                    },
+                    "syslog_timestamp": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "ignore_above": 256,
+                                "type": "keyword"
+                            }
+                        }
+                    },
+                    "@version": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "ignore_above": 256,
+                                "type": "keyword"
+                            }
+                        }
+                    },
+                    "host": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "ignore_above": 256,
+                                "type": "keyword"
+                            }
+                        }
+                    },
+                    "server_ip": {
+                        "type": "ip"
+                    },
+                    "client_ip": {
+                        "type": "ip"
+                    },
+                    "response_time": {
+                        "type": "integer"
+                    },
+                    "server_port": {
+                        "type": "integer"
+                    },
+                    "status": {
+                        "type": "integer"
+                    },
+                    "User-Agent": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "ignore_above": 256,
+                                "type": "keyword"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "aliases": {}
+    }
+}
