@@ -25,7 +25,7 @@
     "express": "~4.13.1",
     "express-jwt": "^3.3.0",
     "jsonwebtoken": "^5.7.0",
-    "mongoose": "^4.4.12",
+    "mongoose": "^5.9.3",
     "morgan": "~1.6.1",
     "mongo-express": "^0.34.0",
     "passport": "^0.3.2",
