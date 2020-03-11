@@ -1,0 +1,69 @@
+---
+- name: GET BIG-IP Token
+  uri:
+    url: "https://{{ extra_ip_mgt }}:{{ extra_port_mgt }}/mgmt/shared/authn/login"
+    method: POST
+    headers:
+      Content-Type: application/json
+    body: "{{ lookup('template','bigip_auth.jinja2') }}"
+    body_format: json
+    timeout: 60
+    status_code: 200, 202
+    validate_certs: false
+  register: auth
+
+- name: GET BIG-IP SSLO category
+  uri:
+    url: "https://{{ extra_ip_mgt }}:{{ extra_port_mgt }}/mgmt/tm/sys/url-db/url-category/~Common~{{ extra_category }}"
+    method: GET
+    headers:
+      X-F5-Auth-Token: "{{auth.json.token.token}}"
+    timeout: 60
+    status_code: 200, 202
+    validate_certs: false
+  register: category
+
+- debug:
+    var: category.json
+
+- name: local - set var urls
+  set_fact:
+    cur_urls: "{{ category.json.urls }}"
+
+- debug:
+    var: cur_urls
+
+- name: local - set var new_url
+  set_fact:
+    new_url:
+      - type: '{{ extra_url_type }}'
+        name: '{{ extra_url_name }}'
+
+- debug:
+    var: new_url
+
+- name: local - append new URL
+  set_fact:
+    new_urls:
+      urls: "{{ cur_urls + new_url }}"
+
+- debug:
+    var: new_urls
+
+- name: UPDATE BIG-IP SSLO category
+  uri:
+    url: "https://{{ extra_ip_mgt }}:{{ extra_port_mgt }}/mgmt/tm/sys/url-db/url-category/~Common~{{ extra_category }}"
+    method: PATCH
+    headers:
+      Content-Type: application/json
+      X-F5-Auth-Token: "{{auth.json.token.token}}"
+    body: "{{ new_urls }}"
+    body_format: json
+    timeout: 60
+    status_code: 200, 202
+    validate_certs: false
+
+
+
+
+...
