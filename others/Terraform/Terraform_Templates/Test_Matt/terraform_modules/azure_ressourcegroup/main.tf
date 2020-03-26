@@ -24,7 +24,7 @@ resource "azurerm_virtual_network" "azurerm_virtualnet" {
     resource_group_name = azurerm_resource_group.azure_rg.name
 
     tags = {
-        environment = "Terraform Demo"
+        environment = var.owner
     }
 }
 

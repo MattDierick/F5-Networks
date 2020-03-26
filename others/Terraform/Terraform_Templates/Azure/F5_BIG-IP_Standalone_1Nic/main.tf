@@ -1,6 +1,6 @@
 ##
 ## azurerm provides the information to target a specific subscription/appid/tenantid/... 
-## fill it if you haven't setup env variables to provide this information
+## fill it if you havent setup env variables to provide this information
 ##
 ##provider "azurerm" {
 ##    subscription_id = "xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
@@ -8,6 +8,7 @@
 ##    client_secret   = "xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 ##    tenant_id       = "xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 ##}
+
 provider "azurerm" {
 }
 

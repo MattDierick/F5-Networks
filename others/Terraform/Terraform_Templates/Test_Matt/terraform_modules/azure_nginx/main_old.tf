@@ -2,6 +2,7 @@
 ### SET the Env Var accordingly ###
 ### https://docs.microsoft.com/fr-fr/azure/terraform/terraform-install-configure ###
 ### select yoru region with az account list-locations --query "[].{DisplayName:displayName, Name:name}" -o table ###
+### When infra is deployed, use Ansible to deploy NGINX ###
 
 
 provider "azurerm" {
@@ -11,6 +12,11 @@ provider "azurerm" {
   features {}
 }
 
+#resource "random_uuid" "rg" { }
+
+resource "random_id" "id" {
+    byte_length = 4
+  }
 
 #################################################################
 ################ Create prereq resources ########################
@@ -19,7 +25,7 @@ provider "azurerm" {
 ### Create Resource Group ###
 
 resource "azurerm_resource_group" "myterraformgroup" {
-    name     = "RG-matt-terraform"
+    name     = "RG-matt-terraform-tfsta${lower(random_id.id.hex)}"
     location = "westeurope"
 
     tags = {
@@ -42,12 +48,20 @@ resource "azurerm_virtual_network" "myterraformnetwork" {
 
 ### Create Subnet ###
 
-resource "azurerm_subnet" "myterraformsubnet" {
-    name                 = "mySubnet-matt-terraform"
+resource "azurerm_subnet" "myterraformsubnet-public" {
+    name                 = "mySubnet-matt-terraform-public"
     resource_group_name  = azurerm_resource_group.myterraformgroup.name
     virtual_network_name = azurerm_virtual_network.myterraformnetwork.name
-    address_prefix       = "10.1.2.0/24"
+    address_prefix       = "10.1.10.0/24"
 }
+
+resource "azurerm_subnet" "myterraformsubnet-private" {
+    name                 = "mySubnet-matt-terraform-private"
+    resource_group_name  = azurerm_resource_group.myterraformgroup.name
+    virtual_network_name = azurerm_virtual_network.myterraformnetwork.name
+    address_prefix       = "10.1.20.0/24"
+}
+
 
 ### Create Public IP ###
 
@@ -107,7 +121,7 @@ resource "azurerm_network_interface" "myterraformnic" {
 
   ip_configuration {
       name                          = "myNicConfiguration"
-      subnet_id                     = azurerm_subnet.myterraformsubnet.id
+      subnet_id                     = azurerm_subnet.myterraformsubnet-private.id
       private_ip_address_allocation = "Dynamic"
       public_ip_address_id          = azurerm_public_ip.myterraformpublicip.id
   }
@@ -152,11 +166,17 @@ resource "azurerm_storage_account" "mystorageaccount" {
 
 
 resource "azurerm_linux_virtual_machine" "myterraformvm" {
-  name                  = "Ubuntu-matt-terraform"
+  name                  = "NGINX-matt-terraform"
   location              = "westeurope"
   resource_group_name   = azurerm_resource_group.myterraformgroup.name
   network_interface_ids = [azurerm_network_interface.myterraformnic.id]
   size                  = "Standard_DS1_v2"
+
+  plan {
+    name = "nginx"
+    product = "nginx"
+    publisher = "miri-infotech-pvt-ltd"
+  }
 
   os_disk {
       name              = "myOsDisk"
@@ -165,13 +185,13 @@ resource "azurerm_linux_virtual_machine" "myterraformvm" {
   }
 
   source_image_reference {
-      publisher = "Canonical"
-      offer     = "UbuntuServer"
-      sku       = "16.04.0-LTS"
-      version   = "latest"
+      publisher = "miri-infotech-pvt-ltd"
+      offer     = "nginx"
+      sku       = "nginx"
+      version   = "1.1.1"
   }
 
-  computer_name  = "myvm"
+  computer_name  = "NGINX"
   admin_username = "dierick"
   disable_password_authentication = true
   
@@ -189,3 +209,6 @@ resource "azurerm_linux_virtual_machine" "myterraformvm" {
   }
 }
 
+##### For NGINX marketplace #####
+##### Accept terms ######
+##### 
