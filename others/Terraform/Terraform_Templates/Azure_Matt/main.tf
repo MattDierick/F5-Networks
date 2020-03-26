@@ -12,3 +12,11 @@ module "azure_ressourcegroup" {
   azure_region = var.azure_region
 }
 
+module "azure_nginx" {
+  source       = "./terraform_modules/azure_nginx"
+  owner        = "${var.owner}-${var.project_name}"
+  azure_region = var.azure_region
+  azure_rg_name = module.azure_ressourcegroup.azure_rg_name
+  private_subnet1_id  = module.azure_ressourcegroup.private_subnet1_id
+  
+}
