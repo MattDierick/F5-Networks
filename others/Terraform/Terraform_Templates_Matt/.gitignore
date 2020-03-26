@@ -1,0 +1,15 @@
+#  Local .terraform directories
+**/.terraform/*
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+
+# .tfvars files
+terraform.tfvars
+
+#AS3 Declaration
+as3_declaration.json
+
+#Ubuntu cloud init conf
+ubuntu_cloudinit.conf
