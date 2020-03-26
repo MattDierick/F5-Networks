@@ -7,7 +7,7 @@ provider "azurerm" {
 
 
 module "azure_ressourcegroup" {
-  source       = "../terraform_modules/azure_ressourcegroup"
+  source       = "./terraform_modules/azure_ressourcegroup"
   owner        = "${var.owner}-${var.project_name}"
   azure_region = var.azure_region
 }

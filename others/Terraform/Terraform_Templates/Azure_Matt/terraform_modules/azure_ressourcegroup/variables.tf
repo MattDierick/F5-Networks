@@ -14,10 +14,10 @@ variable "private_subnet1_cidr" {
 }
 
 variable "azure_region" {
-  default = westeurope
+  type = string
 }
 
 variable "owner" {
-  type = matt-dierick
+  type = string
 }
 
