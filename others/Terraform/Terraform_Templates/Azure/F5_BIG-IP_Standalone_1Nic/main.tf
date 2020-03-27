@@ -16,18 +16,18 @@ provider "azurerm" {
 }
 
 data "azurerm_resource_group" "rg_keyvault" {
-  name = "${var.azure_secret_rg}"
+  name = var.azure_secret_rg
 }
  
-data "azurerm_key_vault" "keyvault" {
-  name = "${var.azure_keyvault_name}"
-  resource_group_name = "${data.azurerm_resource_group.rg_keyvault.name}"
-}
+#data "azurerm_key_vault" "keyvault" {
+#  name = var.azure_keyvault_name
+#  resource_group_name = data.azurerm_resource_group.rg_keyvault.name
+#}
  
-data "azurerm_key_vault_secret" "bigip_admin_password" {
-  name = "bigip-admin-user-password" 
-  key_vault_id = "${data.azurerm_key_vault.keyvault.id}"
-}
+#data "azurerm_key_vault_secret" "bigip_admin_password" {
+#  name = "bigip-admin-user-password"
+#  key_vault_id = data.azurerm_key_vault.keyvault.id
+#}
 
 module "azure_ressourcegroup" {
   source       = "../terraform_modules/azure_ressourcegroup"
@@ -49,7 +49,8 @@ module "azure_f5_standalone" {
   DO_URL            = var.DO_URL
   AS3_URL           = var.AS3_URL
   TS_URL            = var.TS_URL
-  ADMIN_PASSWD      = data.azurerm_key_vault_secret.bigip_admin_password.value
+#  ADMIN_PASSWD      = data.azurerm_key_vault_secret.bigip_admin_password.value
+  ADMIN_PASSWD      = var.ADMIN_PASSWD
   f5_ssh_publickey  = file(pathexpand(var.key_path))
 }
 

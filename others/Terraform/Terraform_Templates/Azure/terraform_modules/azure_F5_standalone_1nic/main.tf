@@ -11,13 +11,17 @@ resource "azurerm_public_ip" "bigip1_public_ip" {
   }
 }
 
+resource "azurerm_subnet_network_security_group_association" "example" {
+  subnet_id                 = var.subnet1_public_id
+  network_security_group_id = azurerm_network_security_group.bigip_sg.id
+}
 
 # Create the 1nic interface for BIG-IP 01
 resource "azurerm_network_interface" "bigip1_nic" {
   name                      = "${var.owner}-bigip1-mgmt-nic"
   location                  = var.azure_region
   resource_group_name       = var.azure_rg_name
-  network_security_group_id = azurerm_network_security_group.bigip_sg.id
+#  network_security_group_id = azurerm_network_security_group.bigip_sg.id
 
   ip_configuration {
     name                          = "primary"
@@ -108,10 +112,11 @@ resource "azurerm_virtual_machine" "f5-bigip1" {
 # Run Startup Script
 resource "azurerm_virtual_machine_extension" "f5-bigip1-run-startup-cmd" {
   name                 = "${var.owner}-f5-bigip1-run-startup-cmd"
+  virtual_machine_id   = azurerm_virtual_machine.f5-bigip1.id
   depends_on           = [azurerm_virtual_machine.f5-bigip1]
-  location             = var.azure_region
-  resource_group_name  = var.azure_rg_name
-  virtual_machine_name = azurerm_virtual_machine.f5-bigip1.name
+# location             = var.azure_region
+# resource_group_name  = var.azure_rg_name
+# virtual_machine_name = azurerm_virtual_machine.f5-bigip1.name
   publisher            = "Microsoft.OSTCExtensions"
   type                 = "CustomScriptForLinux"
   type_handler_version = "1.2"

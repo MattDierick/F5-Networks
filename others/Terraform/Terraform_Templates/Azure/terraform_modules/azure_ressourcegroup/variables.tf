@@ -23,10 +23,10 @@ variable "private_subnet2_cidr" {
   default = "10.10.21.0/24"
 }
 variable "azure_region" {
-  type = "string"
+  type = string
 }
 
 variable "owner" {
-  type = "string"
+  type = string
 }
 

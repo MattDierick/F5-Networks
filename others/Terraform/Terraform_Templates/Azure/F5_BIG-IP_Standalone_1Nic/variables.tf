@@ -21,6 +21,9 @@ variable "azure_secret_rg" {}
 
 variable "azure_keyvault_name" {}
 
+### Var added to replace Vault ######
+variable "ADMIN_PASSWD" {}
+
 ##
 ## Variables related to the Ubuntu deployment
 ##
@@ -31,7 +34,6 @@ variable "ubuntu_instance_count" {
 }
 
 variable "ubuntu_instance_size" {
-  description = "How many ubuntu instances do you want to start per AZ"
   default     = "Standard_DS1_v2"
 }
 
