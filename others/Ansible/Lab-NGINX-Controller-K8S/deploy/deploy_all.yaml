@@ -1,0 +1,9 @@
+---
+- name: deploy app
+  hosts: k8s
+  
+  tasks:
+    # Applys 
+    - block: 
+        - name: apply kubernetes deployment
+          shell: "kubectl apply -f /home/ubuntu/arcadia/arcadia-all.yaml"
