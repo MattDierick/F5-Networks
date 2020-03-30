@@ -1,0 +1,39 @@
+---
+
+  - hosts: f5
+    connection: local
+    gather_facts: false
+    vars:
+      my_admin: "root"
+      my_password: "default"    
+      my_big_ip: "10.1.1.129"
+      my_app: "{{ app }}"
+  
+    tasks:
+    - name: Authenticate to BIG-IP with creds to get token
+      uri:
+        url: "https://{{ my_big_ip }}/mgmt/shared/authn/login"
+        method: POST
+        body:
+          username: "{{ my_admin }}"
+          password: "{{ my_password }}"
+          loginProviderName: "tmos"
+        body_format: json
+        return_content: yes
+        validate_certs: no
+      register: tokenpage
+
+    - name: store the auth tokens
+      set_fact:
+        Token: "{{ tokenpage.json.token.token }}"
+
+    - name: Add node
+      bigip_node:
+        host: 10.20.30.40
+        name: 10.20.30.40
+        provider:
+          server: "{{ my_big_ip }}"
+          user: "{{ my_admin }}"
+          password: "{{ my_password }}"
+          validate_certs: no
+      delegate_to: localhost
