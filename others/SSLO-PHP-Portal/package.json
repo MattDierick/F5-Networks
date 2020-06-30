@@ -23,7 +23,7 @@
     "debug": "~2.2.0",
     "ejs": "~2.3.3",
     "express": "~4.13.1",
-    "express-jwt": "^3.3.0",
+    "express-jwt": "^6.0.0",
     "jsonwebtoken": "^5.7.0",
     "mongoose": "^4.4.12",
     "morgan": "~1.6.1",
