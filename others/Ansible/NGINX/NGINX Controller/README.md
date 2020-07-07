@@ -4,7 +4,7 @@ NGINX Controller Install Ansible Role for demo and test
 This playbook
 
 * Install Docker CE
-* Run a Docker PostGres server
+* Run a Docker PostGreSQL server
 * Run a Docker SMTP server
 * Install [NGINX Controller](https://www.nginx.com/products/nginx-controller/).
 
