@@ -31,7 +31,7 @@ resource "kubernetes_deployment" "main" {
 
       spec {
         container {
-          image = "matt262810/arcadia-main:noauth"
+          image = "registry.gitlab.com/arcadia-application/main-app/mainapp:latest"
           name  = "main"
           image_pull_policy = "IfNotPresent"
 
@@ -97,7 +97,7 @@ resource "kubernetes_deployment" "backend" {
 
       spec {
         container {
-          image = "matt262810/arcadia-backend:latest"
+          image = "registry.gitlab.com/arcadia-application/back-end/backend:latest"
           name  = "backend"
           image_pull_policy = "IfNotPresent"
 
@@ -163,7 +163,7 @@ resource "kubernetes_deployment" "app2" {
 
       spec {
         container {
-          image = "matt262810/arcadia-app2:noauth"
+          image = "registry.gitlab.com/arcadia-application/app2/app2:latest"
           name  = "app2"
           image_pull_policy = "IfNotPresent"
 
@@ -230,7 +230,7 @@ resource "kubernetes_deployment" "app3" {
 
       spec {
         container {
-          image = "matt262810/arcadia-app3:latest"
+          image = "registry.gitlab.com/arcadia-application/app3/app3:latest"
           name  = "app3"
           image_pull_policy = "IfNotPresent"
           

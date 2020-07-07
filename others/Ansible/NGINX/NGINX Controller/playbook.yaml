@@ -1,0 +1,137 @@
+#### Install prerequisites #######
+
+- hosts: localhost
+  become: yes
+  become_method: sudo
+  connection: local
+
+  tasks:
+  - name:  make sure all the prerequisites are present
+    apt:
+      name: "{{ packages }}"
+      state: present
+      update_cache: yes
+    vars:
+      packages:
+      - gettext
+      - bash
+      - jq
+      - gzip
+      - coreutils
+      - grep
+      - less
+      - sed
+      - tar
+      - python-pexpect  # to support ansible
+    tags: packages
+
+#### Install Docker ##########
+
+- hosts: localhost
+  become: yes
+  become_method: sudo
+  connection: local
+
+  tasks:
+    - name: Install aptitude using apt
+      apt: name=aptitude state=latest update_cache=yes force_apt_get=yes
+
+    - name: Install required system packages
+      apt: name={{ item }} state=latest update_cache=yes
+      loop: [ 'apt-transport-https', 'ca-certificates', 'curl', 'software-properties-common', 'python3-pip', 'python-pip', 'virtualenv', 'python3-setuptools']
+
+    - name: Add Docker GPG apt Key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker Repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu bionic stable
+        state: present
+
+    - name: Update apt and install docker-ce
+      apt: update_cache=yes name=docker-ce state=latest
+
+    - name: Install Docker Module for Python
+      pip:
+        name: docker
+
+##### Run PostGre and SMTP server dockers #####
+
+- hosts: localhost
+  become: yes
+  become_method: sudo
+  connection: local
+
+  tasks:
+    - name: Run Postgre docker
+      docker_container:
+        name: "controller-postgres"
+        image: "postgres:9.5"
+        state: started
+        env:
+          POSTGRES_USER: "naas"
+          POSTGRES_PASSWORD: "naaspassword"
+          POSTGRES_DB: "naas"
+        ports:
+          - "5432:5432"
+        restart: yes
+
+    - name: Run SMTP docker
+      docker_container:
+        name: "controller-smtp"
+        image: "namshi/smtp"
+        state: started
+        ports:
+          - "2587:25"
+        restart: yes
+
+
+## changing security context on the remote host to su to run the installer
+- name: install controller
+  hosts: localhost
+  gather_facts: false
+
+  roles:
+    - nginxinc.nginx_controller_install
+
+  vars:
+    - ctrl_tarball_src: "{{ctrl_install_path}}/{{controller_tarball}}"
+    - ctrl_install_path: /home/ubuntu
+    - remote_src: no
+    - db_host: 10.1.20.13
+    - db_port: "5432"
+    - db_user: "naas"
+    - db_password: 'naaspassword'
+    - tsdb_volume_type: local
+    - tsdb_nfs_path: "/controllerdb"
+    - tsdb_nfs_host: storage.internal
+    - smtp_host: "10.1.20.13"
+    - smtp_port: "25"
+    - smtp_authentication: false
+    - smtp_use_tls: false
+    - noreply_address: "noreply@example.com"
+    - fqdn:  10.1.20.13
+    - organization_name: "Nginx"
+    - admin_firstname: "Admin"
+    - admin_lastname: "Nginx"
+    - admin_email: "admin@nginx-udf.internal"
+    - admin_password: 'admin123!'
+    - self_signed_cert: true
+    - overwrite_existing_configs: true
+    - auto_install_docker: false
+    - controller_tarball: "offline-controller-installer-1940006.tar.gz"
+    - ansible_python_interpreter: /usr/bin/python3
+
+# pull the install log for review
+- hosts: localhost
+  become: yes
+  become_method: sudo
+  gather_facts: false
+
+  tasks:
+  - name: fetch the install log
+    fetch:
+      src: /var/log/nginx-controller/nginx-controller-install.log
+      dest: "{{playbook_dir}}/logs/"

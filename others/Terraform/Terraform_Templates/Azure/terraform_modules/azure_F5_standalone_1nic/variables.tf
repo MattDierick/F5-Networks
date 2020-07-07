@@ -1,34 +1,34 @@
 variable "azure_rg_name" {
-    type = "string"
+    type = string
 }
 variable "f5_username" {
   description = "user of the F5 admin that will be created"
   default = "azureuser"
 }
 variable "azure_region" {
-  type = "string"
+  type = string
 }
 
 variable "subnet1_public_id" {
-  type = "string"
+  type = string
 }
 variable "AllowedIPs" {
   type = list(string)
 }
 
 variable "f5_instance_type" {
-  type = "string"
+  type = string
 }
 
 variable "f5_image_name" {
-  type = "string"
+  type = string
 }
 variable "f5_version" {
-  type = "string"
+  type = string
 }
 
 variable "f5_product_name" {
-  type = "string"
+  type = string
 }
 
 variable libs_dir { 
@@ -39,23 +39,23 @@ variable onboard_log {
 }
 
 variable "f5_ssh_publickey" {
-  type = "string"
+  type = string
 }
 variable "owner" {
-  type = "string"
+  type = string
 }
 
 variable "AS3_URL" { 
-  type = "string"
+  type = string
 }
 variable "DO_URL" { 
-  type = "string"
+  type = string
 }
 
 variable "TS_URL" { 
-  type = "string"
+  type = string
 }
 
 variable "ADMIN_PASSWD" { 
-  type = "string"
+  type = string
 }

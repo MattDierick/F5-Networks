@@ -1,0 +1,16 @@
+---
+# vars file for training.bigip
+
+user: "willbeoverriden"
+password: "willbeoverriden"
+appName: "willbeoverriden"
+fqdn: "willbeoverriden"
+bigip_username: "willbeoverriden"
+bigip_password: "willbeoverriden"
+validate_certs: "no"
+partition: "Common"
+member: "willbeoverriden"
+memberPort: "80"
+tenant: "7"
+buildId: ""
+
