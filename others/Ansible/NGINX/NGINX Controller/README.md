@@ -8,7 +8,7 @@ This playbook
 * Run a Docker SMTP server
 * Install [NGINX Controller](https://www.nginx.com/products/nginx-controller/).
 
-This playbook can be used in order to install and run NGINX Controller on Ubuntu withjust one **Ansible playbook**
+This **playbook** can be used in order to install and run NGINX Controller on Ubuntu with all mandatory elements (DB, SMTP ...)
 
 Prerequisites:
 --------------
@@ -19,7 +19,7 @@ Prerequisites:
 Run the playbook:
 -----------------
 
-* copy the controller TAR.GZF package into /home/ubuntu
+* copy the controller TAR.GZ package in /home/ubuntu
 * copy the playbook.yaml in /home/ubuntu
 * ansible-playbook playbook.yaml
 
