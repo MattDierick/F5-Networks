@@ -38,7 +38,7 @@
 
     - name: Install required system packages
       apt: name={{ item }} state=latest update_cache=yes
-      loop: [ 'apt-transport-https', 'ca-certificates', 'curl', 'software-properties-common', 'python3-pip', 'python-pip', virtualenv', 'python3-setuptools']
+      loop: [ 'apt-transport-https', 'ca-certificates', 'curl', 'software-properties-common', 'python3-pip', 'python-pip', 'virtualenv', 'python3-setuptools']
 
     - name: Add Docker GPG apt Key
       apt_key:
@@ -123,7 +123,6 @@
     - auto_install_docker: false
     - controller_tarball: "offline-controller-installer-1940006.tar.gz"
     - ansible_python_interpreter: /usr/bin/python3
-#    - ansible_become_password: '<some secure password>'
 
 # pull the install log for review
 - hosts: localhost

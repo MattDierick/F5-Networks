@@ -14,7 +14,7 @@ Prerequisites:
 --------------
 
 * 8GB of memory / 16 vcpu
-* sudo apt update && sudo apt upgrade && sudo apt install ansible
+* sudo apt update && sudo apt -y upgrade && sudo apt install -y ansible
 * ansible-galaxy install nginxinc.nginx_controller_install
 
 Run the playbook:
