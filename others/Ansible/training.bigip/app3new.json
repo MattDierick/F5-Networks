@@ -1,0 +1,45 @@
+{
+    "metadata": {
+      "name": "cp_app3",
+      "displayName": "Refer Friend",
+      "tags": []
+    },
+    "desiredState": {
+      "ingress": {
+        "gatewayRefs": [
+          {
+            "ref": "/services/environments/env_prod/gateways/gw_app"
+          }
+        ],
+        "uris": {
+          "http://www.arcadia-finance.io/app3/": {}
+        }
+      },
+      "backend": {
+        "ntlmAuthentication": "DISABLED",
+        "preserveHostHeader": "DISABLED",
+        "workloadGroups": {
+          "wl_app3": {
+            "loadBalancingMethod": {
+              "type": "ROUND_ROBIN"
+            },
+            "uris": {
+              "http://10.1.20.21:31662": {
+                "isBackup": false,
+                "isDown": false,
+                "isDrain": false,
+                "resolve": "DISABLED"
+              }
+            }
+          }
+        }
+      },
+      "logging": {
+        "errorLog": "DISABLED",
+        "accessLog": {
+          "state": "DISABLED"
+        }
+      }
+    }
+  }
+  

@@ -1,0 +1,13 @@
+---
+
+  - hosts: localhost
+    connection: local
+    vars:
+        nginxGW: "gw_app"
+
+    tasks:
+    - name: using JINJA2
+      template:
+        src: "./app3.json"
+        dest: "./app3new.json"
+

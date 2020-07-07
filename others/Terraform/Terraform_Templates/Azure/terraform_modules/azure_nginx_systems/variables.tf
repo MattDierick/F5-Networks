@@ -12,52 +12,52 @@ variable "ubuntu_instance_name" {
 }
 
 variable "ubuntu_instance_count" {
-    type = "string"
+    type = string
 }
 
 variable "ubuntu_instance_size" {
-  type = "string"
+  type = string
 }
 variable "ubuntu_username" {
   description = "name of the user that will be created on the instance"
   default = "azureuser"
 }
 variable "azure_region" {
-  type = "string"
+  type = string
 }
 variable "ubuntu_subnet_id_az1" {
-  type = "string"
+  type = string
 }
 variable "private_subnet1_id" {
-  type = "string"
+  type = string
 }
 
 variable "ubuntu_subnet_id_az2" {
-  type = "string"
+  type = string
 }
 variable "public_key" {
-  type = "string"
+  type = string
 }
 variable "azure_rg_name" {
-  type = "string"
+  type = string
 }
 variable "AllowedIPs" {
   type = list(string)
 }
 
 variable "owner" {
-  type = "string"
+  type = string
 }
 
 variable "app_tag_value" {
-  type = "string"
+  type = string
 }
 
 variable "public_subnet1_cidr" {
-  type = "string"
+  type = string
 }
 
 variable "private_subnet1_cidr" {
-  type = "string"
+  type = string
 }
 
