@@ -27,3 +27,5 @@ Run the playbook:
 
 
 Et voilà :)
+
+[![Alt text for your video](https://img.youtube.com/vi/CS5P4wCcqeY/0.jpg)](http://www.youtube.com/watch?v=CS5P4wCcqeY)
