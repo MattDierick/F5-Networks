@@ -22,6 +22,7 @@ Run the playbook:
 
 * copy the controller TAR.GZ package in /home/ubuntu
 * copy the playbook.yaml in /home/ubuntu
+* modify the playbook.yaml with the right controller VM ip address and controller-package-file-name.tar.gz
 * ansible-playbook playbook.yaml
 
 

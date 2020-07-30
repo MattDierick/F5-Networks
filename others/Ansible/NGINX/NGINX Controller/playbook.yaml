@@ -76,7 +76,7 @@
           POSTGRES_DB: "naas"
         ports:
           - "5432:5432"
-        restart: yes
+        restart_policy: always
 
     - name: Run SMTP docker
       docker_container:
@@ -85,7 +85,7 @@
         state: started
         ports:
           - "2587:25"
-        restart: yes
+        restart_policy: always
 
 
 ## changing security context on the remote host to su to run the installer
