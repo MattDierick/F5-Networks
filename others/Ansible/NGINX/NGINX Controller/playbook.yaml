@@ -6,6 +6,7 @@
   connection: local
   
   vars:
+    #### here, the playbook will use the default interface IP address, you can specify the interface with {{ ansible_facts.ansible_eth1.ipv4.address }} ####
     add_ip: "{{ ansible_facts.default_ipv4.address }}"
 
   tasks:
