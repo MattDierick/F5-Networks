@@ -4,6 +4,9 @@
   become: yes
   become_method: sudo
   connection: local
+  
+  vars:
+    add_ip: "{{ ansible_facts.default_ipv4.address }}"
 
   tasks:
   - name:  make sure all the prerequisites are present
@@ -22,6 +25,8 @@
       - less
       - sed
       - tar
+      - socat
+      - conntrack
       - python-pexpect  # to support ansible
     tags: packages
 
@@ -100,19 +105,19 @@
     - ctrl_tarball_src: "{{ctrl_install_path}}/{{controller_tarball}}"
     - ctrl_install_path: /home/ubuntu
     - remote_src: no
-    - db_host: 10.1.20.13
+    - db_host: {{ add_ip }}
     - db_port: "5432"
     - db_user: "naas"
     - db_password: 'naaspassword'
     - tsdb_volume_type: local
     - tsdb_nfs_path: "/controllerdb"
     - tsdb_nfs_host: storage.internal
-    - smtp_host: "10.1.20.13"
+    - smtp_host: "{{ add_ip }}"
     - smtp_port: "25"
     - smtp_authentication: false
     - smtp_use_tls: false
     - noreply_address: "noreply@example.com"
-    - fqdn:  10.1.20.13
+    - fqdn:  {{ add_ip }}
     - organization_name: "Nginx"
     - admin_firstname: "Admin"
     - admin_lastname: "Nginx"
