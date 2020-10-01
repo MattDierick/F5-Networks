@@ -1,0 +1,87 @@
+{
+"policy": {
+    "name": "Complete_OWASP_Top_Ten",
+    "description": "A generic, OWASP Top 10 protection items v1.0",
+    "template": {
+    "name": "POLICY_TEMPLATE_NGINX_BASE"
+    },
+    "fullPath": "/Common/Complete_OWASP_Top_Ten",
+    "enforcementMode":"blocking",
+    "signature-settings":{
+        "signatureStaging": false,
+        "minimumAccuracyForAutoAddedSignatures": "high"
+    },
+    "caseInsensitive": true,
+    "general": {
+    "trustXff": true
+    },
+    "data-guard": {
+    "enabled": true
+    },
+    "blocking-settings": {
+    "violations": [
+        {
+        "alarm": true,
+        "block": true,
+        "description": "Modified NAP cookie",
+        "name": "VIOL_ASM_COOKIE_MODIFIED"
+        },
+        {
+        "alarm": true,
+        "block": true,
+        "description": "XML data does not comply with format settings",
+        "name": "VIOL_XML_FORMAT"
+        },
+        {
+        "name": "VIOL_FILETYPE",
+        "alarm": true,
+        "block": true
+        }
+    ],
+    "evasions": [
+        {
+        "description": "Bad unescape",
+        "enabled": true
+        },
+        {
+        "description": "Apache whitespace",
+        "enabled": true
+        },
+        {
+        "description": "Bare byte decoding",
+        "enabled": true
+        },
+        {
+        "description": "IIS Unicode codepoints",
+        "enabled": true
+        },
+        {
+        "description": "IIS backslashes",
+        "enabled": true
+        },
+        {
+        "description": "%u decoding",
+        "enabled": true
+        },
+        {
+        "description": "Multiple decoding",
+        "enabled": true,
+        "maxDecodingPasses": 3
+        },
+        {
+        "description": "Directory traversals",
+        "enabled": true
+        }
+    ]
+    },
+    "xml-profiles": [
+    {
+        "name": "Default",
+        "defenseAttributes": {
+        "allowDTDs": false,
+        "allowExternalReferences": false
+        }
+    }
+    ]
+}
+}
