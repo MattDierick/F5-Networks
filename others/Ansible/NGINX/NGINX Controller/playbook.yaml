@@ -106,7 +106,7 @@
     - ctrl_tarball_src: "{{ctrl_install_path}}/{{controller_tarball}}"
     - ctrl_install_path: /home/ubuntu
     - remote_src: no
-    - db_host: {{ add_ip }}
+    - db_host: "{{ add_ip }}"
     - db_port: "5432"
     - db_user: "naas"
     - db_password: 'naaspassword'
@@ -118,7 +118,7 @@
     - smtp_authentication: false
     - smtp_use_tls: false
     - noreply_address: "noreply@example.com"
-    - fqdn:  {{ add_ip }}
+    - fqdn:  "{{ add_ip }}"
     - organization_name: "Nginx"
     - admin_firstname: "Admin"
     - admin_lastname: "Nginx"
