@@ -1,0 +1,24 @@
+input {
+	file {
+		start_position => "beginning"
+		path => "/home/crypto/*json"
+		sincedb_path => "/dev/null"
+	}
+}
+
+filter {
+	json {
+		source => "message"
+	}
+	mutate {
+		remove_field => ["[dns]","[http]","http2","message"]
+	}
+}
+
+output {
+	elasticsearch {
+		hosts => "http://localhost:9200"
+		index => "demo-crypto"
+	}
+	stdout {}
+}
