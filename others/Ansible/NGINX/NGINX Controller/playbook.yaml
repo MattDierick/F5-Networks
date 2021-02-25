@@ -103,31 +103,32 @@
     - nginxinc.nginx_controller_install
 
   vars:
-    - ctrl_tarball_src: "{{ctrl_install_path}}/{{controller_tarball}}"
-    - ctrl_install_path: /home/ubuntu
-    - remote_src: no
-    - db_host: "{{ add_ip }}"
-    - db_port: "5432"
-    - db_user: "naas"
-    - db_password: 'naaspassword'
-    - tsdb_volume_type: local
-    - tsdb_nfs_path: "/controllerdb"
-    - tsdb_nfs_host: storage.internal
-    - smtp_host: "{{ add_ip }}"
-    - smtp_port: "25"
-    - smtp_authentication: false
-    - smtp_use_tls: false
-    - noreply_address: "noreply@example.com"
-    - fqdn:  "{{ add_ip }}"
-    - organization_name: "Nginx"
-    - admin_firstname: "Admin"
-    - admin_lastname: "Nginx"
-    - admin_email: "admin@nginx-udf.internal"
-    - admin_password: 'admin123!'
-    - self_signed_cert: true
-    - overwrite_existing_configs: true
-    - auto_install_docker: false
-    - controller_tarball: "offline-controller-installer-1940006.tar.gz"
+    - nginx_controller_tarball: "{{ctrl_install_path}}/{{controller_tarball}}"
+    - nginx_controller_install_path: /home/ubuntu
+    - nginx_controller_remote_source: no
+    - nginx_controller_db_host: "{{ add_ip }}"
+    - nginx_controller_db_port: "5432"
+    - nginx_controller_db_enable_ssl: false
+    - nginx_controller_db_user: "naas"
+    - nginx_controller_db_password: 'naaspassword'
+    - nginx_controller_tsdb_volume_type: local
+    - nginx_controller_tsdb_nfs_path: "/controllerdb"
+    - nginx_controller_tsdb_nfs_host: storage.internal
+    - nginx_controller_smtp_host: "{{ add_ip }}"
+    - nginx_controller_smtp_port: "25"
+    - nginx_controller_smtp_authentication: false
+    - nginx_controller_smtp_use_tls: false
+    - nginx_controller_noreply_address: "noreply@example.com"
+    - nginx_controller_fqdn:  "{{ add_ip }}"
+    - nginx_controller_organization_name: "Nginx"
+    - nginx_controller_admin_firstname: "Admin"
+    - nginx_controller_admin_lastname: "Nginx"
+    - nginx_controller_admin_email: "admin@nginx-udf.internal"
+    - nginx_controller_admin_password: 'admin123!'
+    - nginx_controller_self_signed_cert: true
+    - nginx_controller_overwrite_existing_configs: true
+    - nginx_controller_auto_install_docker: false
+    - nginx_controller_tarball: "controller-installer-3.14.0.tar.gz"
     - ansible_python_interpreter: /usr/bin/python3
 
 # pull the install log for review
