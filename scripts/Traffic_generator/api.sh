@@ -8,6 +8,15 @@ curl -k --silent --output /dev/null --location 'https://'$1'/api/adjectives' --h
   "Card": "4111 1111 1111 1111",
   "SSN": "123-34-4532"
 }';
+curl -k --silent --output /dev/null --location 'https://'$1'/api/locations' --header 'Cookie: _imp_apg_r_='$DID'' --header 'xff: '$IP'' --header 'Content-Type: application/json' \
+--data-raw '{
+  "name": "forest",
+  "SSN": "187089932132111",
+  "Phone": "+33 6 01 02 03 04"
+}';
+
+curl -k --silent --output /dev/null --location --request DELETE 'https://'$1'/api/adjectives/4' --header 'Cookie: _imp_apg_r_='$DID'' --header 'xff: '$IP'';
+curl -k --silent --output /dev/null --location --request DELETE 'https://'$1'/api/locations/4' --header 'Cookie: _imp_apg_r_='$DID'' --header 'xff: '$IP'';
 curl -k --silent --output /dev/null --location 'https://'$1'/api/adjectives' --header 'Cookie: _imp_apg_r_='$DID'' --header 'xff: '$IP'';
 curl -k --silent --output /dev/null --location 'https://'$1'/api/locations' --header 'Cookie: _imp_apg_r_='$DID'' --header 'xff: '$IP'';
 curl -k --silent --output /dev/null --location 'https://'$1'/api/animals' --header 'Cookie: _imp_apg_r_='$DID'' --header 'xff: '$IP'';
@@ -15,4 +24,9 @@ curl -k --silent --output /dev/null --location 'https://'$1'/api/colors' --heade
 curl -k --silent --output /dev/null --location 'https://'$1'/api/locations/1' --header 'Cookie: _imp_apg_r_='$DID'' --header 'xff: '$IP'';
 curl -k --silent --output /dev/null --location 'https://'$1'/api/locations/2' --header 'Cookie: _imp_apg_r_='$DID'' --header 'xff: '$IP'';
 curl -k --silent --output /dev/null --location 'https://'$1'/api/locations/3' --header 'Cookie: _imp_apg_r_='$DID'' --header 'xff: '$IP'';
+curl -k --silent --output /dev/null --location 'https://'$1'/api/adjectives' --header 'Cookie: _imp_apg_r_='$DID'' --header 'xff: '$IP'' --header 'Authorization: Basic bWF0dDppbG92ZW1hbWE=';
+curl -k --silent --output /dev/null --location 'https://'$1'/api/animals' --header 'Cookie: _imp_apg_r_='$DID'' --header 'xff: '$IP'' --header 'Authorization: Bearer blablablalblalfsdfgfsdgf';
+curl -k --silent --output /dev/null --location 'https://'$1'/api/colors' --header 'Cookie: _imp_apg_r_='$DID'' --header 'xff: '$IP'' --header 'apikey: totovalue';
+curl -k --silent --output /dev/null --location 'https://'$1'/api/animals' --header 'Cookie: _imp_apg_r_='$DID'' --header 'xff: '$IP'' --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.e30.VuKJBpuCqbGM
+iaDqT8L-iIsiPNlkKt4bW3K99DtQ9JI';
 done
