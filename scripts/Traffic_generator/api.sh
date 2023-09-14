@@ -24,6 +24,4 @@ curl -k --silent --output /dev/null --location 'https://'$1'/api/colors' --heade
 curl -k --silent --output /dev/null --location 'https://'$1'/api/locations/1' --header 'Cookie: _imp_apg_r_='$DID'' --header 'xff: '$IP'';
 curl -k --silent --output /dev/null --location 'https://'$1'/api/locations/2' --header 'Cookie: _imp_apg_r_='$DID'' --header 'xff: '$IP'';
 curl -k --silent --output /dev/null --location 'https://'$1'/api/locations/3' --header 'Cookie: _imp_apg_r_='$DID'' --header 'xff: '$IP'';
-curl -k --silent --output /dev/null --location 'https://'$1'/api/adjectives' --header 'Cookie: _imp_apg_r_='$DID'' --header 'xff: '$IP'' --header 'Authorization: Basic bWF0dDppbG92ZW1hbWE=';
-curl -k --silent --output /dev/null --location 'https://'$1'/api/colors' --header 'Cookie: _imp_apg_r_='$DID'' --header 'xff: '$IP'' --header 'apikey: totovalue';
 done
