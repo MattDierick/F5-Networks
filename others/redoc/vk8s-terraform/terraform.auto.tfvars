@@ -1,0 +1,5 @@
+namespace   = "m-dierick"
+workload_name   = "dev-portal-tf"
+api_token   = "YOUR_API_TOKEN"
+oas_url     = "https://api.swaggerhub.com/apis/F5EMEASSA/API-Sentence-2022/v1"
+http_lb_domain  = "redoc-demo-default-api.emea-ent.f5demos.com"
