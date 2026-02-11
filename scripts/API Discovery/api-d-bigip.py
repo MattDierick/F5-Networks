@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Transforms words from input-xc.txt into pattern ves-io-{word}-sentence-re-lb
-and writes to output-xc.txt. Handles empty lines and strips whitespace.
+Transforms words from input-bigip.txt into pattern ves-io-demo-app-waap-{word}
+and writes to output-bigip.txt. Handles empty lines and strips whitespace.
 """
 
-input_file = 'input-xc.txt'
-output_file = 'output-xc.txt'
-pattern = 'ves-io-{}-sentence-re-lb'
+input_file = 'input-bigip.txt'
+output_file = 'output-bigip.txt'
+pattern = 'ves-io-demo-app-waap-{}'
 
 try:
     with open(input_file, 'r') as infile:
