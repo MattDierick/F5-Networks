@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-Transforms words from input-bigip.txt into pattern ves-io-demo-app-waap-{word}
+Transforms words from input-bigip.txt into pattern ves-io-{ns}-waap-{vs}
 and writes to output-bigip.txt. Handles empty lines and strips whitespace.
+Collect the vs name from the console and set the pattern below accordingly
 """
 
 input_file = 'input-bigip.txt'
 output_file = 'output-bigip.txt'
-pattern = 'ves-io-demo-app-waap-{}'
+pattern = 'ves-io-{}-vs-6bb4768c9'
 
 try:
     with open(input_file, 'r') as infile:
