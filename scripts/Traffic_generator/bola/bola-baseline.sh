@@ -1,29 +1,29 @@
 #!/bin/bash
 
 # Base URL for the API endpoint
-BASE_URL='https://api-sentence.emea-ent.f5demos.com/api/animals/'
+BASE_URL='https://api-sentence-auth.emea-ent.f5demos.com/api/locations/'
 
 # Read JWT tokens into an array using a while loop (portable approach)
 JWT_LIST=()
 while IFS= read -r line; do
   JWT_LIST+=("$line")
-done < jwts.txt
+done < /home/azureuser/bola/tokens.txt
 
 # Check if there are any JWT tokens in the file
 if [ ${#JWT_LIST[@]} -eq 0 ]; then
-  echo "Error: No JWT tokens found in jwts.txt"
+  echo "Error: No JWT tokens found in tokens.txt"
   exit 1
 fi
 
 # Total number of requests
-TOTAL_REQUESTS=40
+TOTAL_REQUESTS=70
 
 # Generate and send traffic
-for ((i=0; i<TOTAL_REQUESTS; i++)); do
-  # Generate dynamic RESOURCE_ID (1 to 40)
+for ((i=5; i<TOTAL_REQUESTS; i++)); do
+  # Generate dynamic RESOURCE_ID (5 to 75)
   RESOURCE_ID=$((i + 1))
 
-  # Generate dynamic SRC_IP (121.78.141.1 to 121.78.141.40)
+  # Generate dynamic SRC_IP (121.78.141.1 to 121.78.141.60)
   SRC_IP="121.78.141.$((i + 1))"
 
   # Use the corresponding JWT token (loop around if more requests than tokens)
